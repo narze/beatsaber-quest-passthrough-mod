@@ -59,7 +59,8 @@ void DumpRenderState(const char *reason) {
     std::string shader = material && material->get_shader()
                              ? std::string(material->get_shader()->get_name())
                              : "no-material";
-    auto &entry = groups[scene][typeName(reinterpret_cast<Il2CppObject *>(r)) + " / " + shader];
+    auto &entry = groups[scene][fmt::format("L{} ", r->get_gameObject()->get_layer()) +
+                                typeName(reinterpret_cast<Il2CppObject *>(r)) + " / " + shader];
     if (entry.first++ < 3) entry.second += std::string(r->get_gameObject()->get_name()) + ", ";
   }
   for (auto &[scene, byShader] : groups) {

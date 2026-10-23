@@ -9,9 +9,12 @@
 
 #include "environment.hpp"
 
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "GlobalNamespace/MainCameraCullingMask.hpp"
+#include "UnityEngine/Camera.hpp"
 #include "UnityEngine/GameObject.hpp"
 #include "UnityEngine/Renderer.hpp"
 #include "UnityEngine/SceneManagement/LoadSceneMode.hpp"
@@ -20,6 +23,7 @@
 #include "UnityEngine/Transform.hpp"
 #include "beatsaber-hook/shared/utils/typedefs-wrappers.hpp"
 #include "bsml/shared/BSML/MainThreadScheduler.hpp"
+#include "culling_mask.hpp"
 #include "diagnostics.hpp"
 #include "main.hpp"
 #include "scene_filter.hpp"
@@ -35,6 +39,20 @@ struct HiddenRenderer {
   std::string scene;
 };
 std::vector<HiddenRenderer> hidden; // main thread only
+
+// The gameplay camera and the culling mask the game gave it. Light scripts
+// turn environment renderers back on, and some environment objects are
+// spawned into GameCore, so for songs we also cull the environment layers.
+std::optional<SafePtrUnity<UnityEngine::Camera>> gameplayCamera; // not assignable, so optional
+int gameplayCameraMask = 0;
+
+void applyCullingMask(const passthrough::Settings &cfg) {
+  if (!gameplayCamera || !*gameplayCamera) return;
+  int mask = passthrough::EnvironmentCullingMask(gameplayCameraMask,
+                                                 cfg.enabled && cfg.hideEnvironment);
+  (*gameplayCamera)->set_cullingMask(mask);
+  PaperLogger.info("gameplay camera culling mask 0x{:x} (game set 0x{:x})", mask, gameplayCameraMask);
+}
 
 bool shouldHide(const std::string &scene, const passthrough::Settings &cfg) {
   return cfg.enabled &&
@@ -129,12 +147,26 @@ MAKE_HOOK_MATCH(SceneManager_Internal_SceneLoaded,
   if (name == kMenuScene) BSML::MainThreadScheduler::ScheduleAfterTime(3.0f, [] { passthrough::DumpRenderState("menu"); });
 }
 
+MAKE_HOOK_MATCH(MainCameraCullingMask_Start, &GlobalNamespace::MainCameraCullingMask::Start, void,
+                GlobalNamespace::MainCameraCullingMask *self) {
+  MainCameraCullingMask_Start(self);
+  auto camera = self->_camera;
+  if (!camera) return;
+  gameplayCamera.emplace(camera.ptr());
+  gameplayCameraMask = camera->get_cullingMask();
+  applyCullingMask(passthrough::CurrentSettings().Get());
+}
+
 namespace passthrough {
 
-void InstallEnvironmentHooks() { INSTALL_HOOK(PaperLogger, SceneManager_Internal_SceneLoaded); }
+void InstallEnvironmentHooks() {
+  INSTALL_HOOK(PaperLogger, SceneManager_Internal_SceneLoaded);
+  INSTALL_HOOK(PaperLogger, MainCameraCullingMask_Start);
+}
 
 void ApplyEnvironment() {
   const Settings cfg = CurrentSettings().Get();
+  applyCullingMask(cfg);
 
   // Show again what should no longer be hidden; forget destroyed renderers.
   // (SafePtrUnity cannot be assigned, so build a new list instead of erase_if.)
