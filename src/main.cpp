@@ -1,73 +1,14 @@
 #include "main.hpp"
 
-#include <string>
-
-#include "beatsaber-hook/shared/config/config-utils.hpp"
+#include "config.hpp"
+#include "environment.hpp"
 #include "scotland2/shared/modloader.h"
+#include "settings_ui.hpp"
 #include "xr_hooks.hpp"
 
 // Stores the ID and version of our mod, and is sent to
 // the modloader upon startup
 static modloader::ModInfo modInfo{MOD_ID, VERSION, 0};
-
-// Reads Configs/Passthrough.json and writes back any missing keys with their
-// defaults, so the file always shows every setting:
-//   placement: "underlay" (background) or "overlay" (on top, for testing)
-//   opacity:   0..1, passthrough opacity
-//   sourceAlpha: blend the game over passthrough with the game's alpha
-//   lumaKey:   replace the game's alpha with a brightness key (keyLow..keyHigh)
-static passthrough::Settings loadSettings() {
-  passthrough::Settings s;
-  Configuration config(modInfo);
-  config.Load();
-  auto &doc = config.config;
-  if (!doc.IsObject()) doc.SetObject();
-  auto &alloc = doc.GetAllocator();
-  bool changed = false;
-
-  if (!doc.HasMember("placement") || !doc["placement"].IsString()) {
-    doc.RemoveMember("placement");
-    doc.AddMember("placement", "underlay", alloc);
-    changed = true;
-  }
-  std::string placement = doc["placement"].GetString();
-  s.placement = placement == "overlay" ? passthrough::LayerPlacement::Overlay
-                                       : passthrough::LayerPlacement::Underlay;
-
-  if (!doc.HasMember("opacity") || !doc["opacity"].IsNumber()) {
-    doc.RemoveMember("opacity");
-    doc.AddMember("opacity", s.opacity, alloc);
-    changed = true;
-  }
-  s.opacity = doc["opacity"].GetFloat();
-
-  if (!doc.HasMember("sourceAlpha") || !doc["sourceAlpha"].IsBool()) {
-    doc.RemoveMember("sourceAlpha");
-    doc.AddMember("sourceAlpha", s.sourceAlpha, alloc);
-    changed = true;
-  }
-  s.sourceAlpha = doc["sourceAlpha"].GetBool();
-
-  auto number = [&](const char *name, float &value) {
-    if (!doc.HasMember(name) || !doc[name].IsNumber()) {
-      doc.RemoveMember(name);
-      doc.AddMember(rapidjson::Value(name, alloc).Move(), rapidjson::Value(value).Move(), alloc);
-      changed = true;
-    }
-    value = doc[name].GetFloat();
-  };
-  if (!doc.HasMember("lumaKey") || !doc["lumaKey"].IsBool()) {
-    doc.RemoveMember("lumaKey");
-    doc.AddMember("lumaKey", s.lumaKey, alloc);
-    changed = true;
-  }
-  s.lumaKey = doc["lumaKey"].GetBool();
-  number("keyLow", s.keyLow);
-  number("keyHigh", s.keyHigh);
-
-  if (changed) config.Write();
-  return s;
-}
 
 // Called at the early stages of game loading
 MOD_EXTERN_FUNC void setup(CModInfo *info) noexcept {
@@ -77,14 +18,17 @@ MOD_EXTERN_FUNC void setup(CModInfo *info) noexcept {
   Paper::Logger::RegisterFileContextId(PaperLogger.tag);
 
   PaperLogger.info("Passthrough {} setup()", VERSION);
+  passthrough::LoadConfig(modInfo);
 
   // Must be before the game creates its OpenXR instance (early mod).
-  passthrough::InstallXrHooks(loadSettings());
+  passthrough::InstallXrHooks();
 }
 
 // Called later on in the game loading - a good time to install function hooks
 MOD_EXTERN_FUNC void late_load() noexcept {
   il2cpp_functions::Init();
+  passthrough::InstallEnvironmentHooks();
+  passthrough::RegisterSettingsUi();
 
   PaperLogger.info("late_load() done");
 }

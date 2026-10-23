@@ -34,7 +34,7 @@ namespace {
 
 using namespace passthrough;
 
-Settings settings; // set once in setup(), before any OpenXR call
+std::atomic<float> appliedOpacity{-1.0f}; // last opacity sent to the runtime
 
 PFN_xrGetInstanceProcAddr realGetInstanceProcAddr = nullptr;
 PFN_xrCreateInstance realCreateInstance = nullptr;
@@ -119,10 +119,11 @@ void createPassthroughLocked(XrSession s) {
   }
 
   XrPassthroughStyleFB style{XR_TYPE_PASSTHROUGH_STYLE_FB};
-  style.textureOpacityFactor = settings.opacity;
+  style.textureOpacityFactor = CurrentSettings().Get().opacity;
   style.edgeColor = {0, 0, 0, 0};
   logResult("xrPassthroughLayerSetStyleFB", setPassthroughStyle(layer, &style));
 
+  appliedOpacity.store(style.textureOpacityFactor);
   layerHandle.store(layer);
 }
 
@@ -197,7 +198,17 @@ XRAPI_ATTR XrResult XRAPI_CALL DestroySession(XrSession s) {
 
 XRAPI_ATTR XrResult XRAPI_CALL EndFrame(XrSession s, const XrFrameEndInfo *info) {
   XrPassthroughLayerFB layer = layerHandle.load();
-  if (layer == XR_NULL_HANDLE || s != session.load()) return realEndFrame(s, info);
+  const Settings cfg = CurrentSettings().Get();
+  if (!cfg.enabled || layer == XR_NULL_HANDLE || s != session.load()) return realEndFrame(s, info);
+
+  if (cfg.opacity != appliedOpacity.load()) {
+    XrPassthroughStyleFB style{XR_TYPE_PASSTHROUGH_STYLE_FB};
+    style.textureOpacityFactor = cfg.opacity;
+    style.edgeColor = {0, 0, 0, 0};
+    XrResult sr = setPassthroughStyle(layer, &style);
+    if (XR_SUCCEEDED(sr)) appliedOpacity.store(cfg.opacity);
+    logResult("xrPassthroughLayerSetStyleFB (opacity change)", sr);
+  }
 
   XrCompositionLayerPassthroughFB ptLayer{XR_TYPE_COMPOSITION_LAYER_PASSTHROUGH_FB};
   ptLayer.flags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
@@ -206,14 +217,14 @@ XRAPI_ATTR XrResult XRAPI_CALL EndFrame(XrSession s, const XrFrameEndInfo *info)
 
   // Underlay: the game must be blended over the passthrough with its alpha.
   thread_local std::vector<XrCompositionLayerProjection> projStorage;
-  auto gameLayers = settings.sourceAlpha
+  auto gameLayers = cfg.sourceAlpha
                         ? WithSourceAlpha(info->layers, info->layerCount, projStorage)
                         : std::vector<const XrCompositionLayerBaseHeader *>(
                               info->layers, info->layers + info->layerCount);
   auto layers = WithPassthroughLayer(gameLayers.data(), static_cast<uint32_t>(gameLayers.size()),
                                      reinterpret_cast<const XrCompositionLayerBaseHeader *>(&ptLayer),
-                                     settings.placement);
-  if (settings.lumaKey) {
+                                     cfg.placement);
+  if (cfg.lumaKey) {
     for (uint32_t i = 0; i < info->layerCount; i++) {
       if (info->layers[i]->type != XR_TYPE_COMPOSITION_LAYER_PROJECTION) continue;
       auto *proj = reinterpret_cast<const XrCompositionLayerProjection *>(info->layers[i]);
@@ -276,9 +287,10 @@ XRAPI_ATTR XrResult XRAPI_CALL AcquireSwapchainImage(XrSwapchain sc,
 
 XRAPI_ATTR XrResult XRAPI_CALL ReleaseSwapchainImage(XrSwapchain sc,
                                                      const XrSwapchainImageReleaseInfo *info) {
-  if (settings.lumaKey && layerHandle.load() != XR_NULL_HANDLE) {
+  const Settings cfg = CurrentSettings().Get();
+  if (cfg.enabled && cfg.lumaKey && layerHandle.load() != XR_NULL_HANDLE) {
     if (auto target = swapchains.ReleaseTarget(key(sc))) {
-      alphaPass.Apply(*target, settings.keyLow, settings.keyHigh);
+      alphaPass.Apply(*target, cfg.keyLow, cfg.keyHigh);
     }
   }
   return realReleaseSwapchainImage(sc, info);
@@ -318,12 +330,7 @@ MAKE_HOOK_NO_CATCH(xrGetInstanceProcAddr_hook, nullptr, XrResult, XrInstance ins
 
 namespace passthrough {
 
-void InstallXrHooks(const Settings &s) {
-  settings = s;
-  PaperLogger.info("settings: placement={} opacity={} sourceAlpha={} lumaKey={} key={}..{}",
-                   settings.placement == LayerPlacement::Underlay ? "underlay" : "overlay",
-                   settings.opacity, settings.sourceAlpha, settings.lumaKey, settings.keyLow,
-                   settings.keyHigh);
+void InstallXrHooks() {
   // The game's OpenXR loader lives in the APK lib dir. Loading it here (if
   // libunity has not yet) gives the same instance OVRPlugin uses later.
   void *loader = dlopen("libopenxr_loader.so", RTLD_NOW);

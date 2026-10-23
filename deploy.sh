@@ -45,12 +45,15 @@ adb shell rm -f "$OLD_PATH"   # our own file from the hello-world stage
 adb shell am broadcast -a com.oculus.vrpowermanager.prox_close >/dev/null
 adb shell am force-stop $PKG
 adb shell am start -n $PKG/com.unity3d.player.UnityPlayerActivity >/dev/null
+# Horizon OS sometimes shows a "Restore App" launch check first. Wait for the
+# user to select "Open App" there (never "Restore").
 pid=""
-for _ in $(seq 1 50); do
+for i in $(seq 1 300); do
   pid=$(adb shell pidof $PKG | tr -d '\r') && [ -n "$pid" ] && break
+  [ "$i" = 15 ] && echo "waiting for the game... if the headset shows 'Restore App', select 'Open App'"
   sleep 0.2
 done
-[ -n "$pid" ] || { echo "game did not start (check for the Restore App dialog in the headset)" >&2; exit 1; }
+[ -n "$pid" ] || { echo "game did not start within 60 s" >&2; exit 1; }
 echo "started pid=$pid"
 [ $LOG = 1 ] || exit 0
 
