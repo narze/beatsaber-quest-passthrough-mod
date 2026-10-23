@@ -16,6 +16,7 @@
 #include "GlobalNamespace/OVRInput.hpp"
 #include "GlobalNamespace/PauseMenuManager.hpp"
 #include "UnityEngine/GameObject.hpp"
+#include "UnityEngine/UI/Button.hpp"
 #include "UnityEngine/Transform.hpp"
 #include "beatsaber-hook/shared/utils/typedefs-wrappers.hpp"
 #include "bsml/shared/BSML-Lite.hpp"
@@ -124,21 +125,52 @@ void gameplaySetupDidActivate(UnityEngine::GameObject *self, bool firstActivatio
 
 // --- pause menu panel ---
 
-std::optional<SafePtrUnity<BSML::FloatingScreen>> pauseScreen; // optional: not assignable
+// A small "Passthrough" button that opens the settings. The user can move
+// it with the handle above it; the position is saved. It opens closed on
+// every pause, so it does not cover the pause menu.
+constexpr UnityEngine::Vector2 kCollapsedSize{34, 10};
+constexpr UnityEngine::Vector2 kExpandedSize{100, 60}; // 70 wide clipped the settings rows
+
+struct PauseScreen {
+  SafePtrUnity<BSML::FloatingScreen> screen;
+  SafePtrUnity<UnityEngine::GameObject> openButton, settings;
+};
+std::optional<PauseScreen> pauseScreen; // optional: not assignable
+
+void setPauseExpanded(bool expanded) {
+  if (!pauseScreen || !pauseScreen->screen) return;
+  pauseScreen->openButton->SetActive(!expanded);
+  pauseScreen->settings->SetActive(expanded);
+  pauseScreen->screen->set_ScreenSize(expanded ? kExpandedSize : kCollapsedSize);
+  pauseScreen->screen->UpdateHandle();
+  if (expanded) refreshAll();
+}
+
+void onPauseScreenReleased(BSML::FloatingScreen *, const BSML::FloatingScreenHandleEventArgs &args) {
+  change([&](Settings &x) {
+    x.pausePanel = {args.position.x, args.position.y, args.position.z,
+                    args.rotation.x, args.rotation.y, args.rotation.z, args.rotation.w};
+  });
+}
 
 void showPausePanel(bool show) {
-  if (show && (!pauseScreen || !*pauseScreen)) {
-    // Left of the pause menu, turned towards the player. 100 wide: the
-    // settings rows need it (70 clipped the labels and the slider values).
-    // The right edge stays where it was, clear of the pause menu.
-    auto screen = BSML::Lite::CreateFloatingScreen({100, 60}, {-1.70f, 1.35f, 1.43f}, {0, -35, 0}, 0.0f, true, false);
-    auto container = BSML::Lite::CreateScrollableSettingsContainer(screen->get_transform());
-    buildPanel(container->get_transform());
-    pauseScreen.emplace(screen);
+  if (show && (!pauseScreen || !pauseScreen->screen)) {
+    const passthrough::PanelPose p = CurrentSettings().Get().pausePanel;
+    auto screen = BSML::Lite::CreateFloatingScreen(kExpandedSize, {p.x, p.y, p.z}, {0, 0, 0}, 0.0f, true, true,
+                                                   BSML::Side::Top);
+    screen->set_ScreenRotation({p.qx, p.qy, p.qz, p.qw});
+    screen->HandleReleased.addCallback(&onPauseScreenReleased);
+
+    auto settings = BSML::Lite::CreateScrollableSettingsContainer(screen->get_transform());
+    BSML::Lite::CreateUIButton(settings->get_transform(), "Close", [] { setPauseExpanded(false); });
+    buildPanel(settings->get_transform());
+    auto openButton = BSML::Lite::CreateUIButton(screen->get_transform(), "Passthrough", UnityEngine::Vector2{0, 0},
+                                                 kCollapsedSize, [] { setPauseExpanded(true); });
+    pauseScreen.emplace(PauseScreen{screen, openButton->get_gameObject().ptr(), settings});
   }
-  if (pauseScreen && *pauseScreen) {
-    (*pauseScreen)->get_gameObject()->SetActive(show);
-    if (show) refreshAll();
+  if (pauseScreen && pauseScreen->screen) {
+    pauseScreen->screen->get_gameObject()->SetActive(show);
+    if (show) setPauseExpanded(false);
   }
 }
 

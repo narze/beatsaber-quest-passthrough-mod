@@ -15,6 +15,8 @@
 //   hideEnvironment / hideMenuEnvironment: hide the environment renderers
 //   distanceFog: keep the bloom fog when the environment is hidden
 //   quickToggle: A+B on the right controller toggles passthrough in songs
+//   pausePanel:  position (x, y, z) and rotation (qx, qy, qz, qw) of the
+//                pause menu panel; the user moves it with its handle
 
 namespace passthrough {
 
@@ -37,6 +39,16 @@ void writeSettings(ConfigDocument &doc, const Settings &s) {
   doc.AddMember("hideMenuEnvironment", s.hideMenuEnvironment, alloc);
   doc.AddMember("distanceFog", s.distanceFog, alloc);
   doc.AddMember("quickToggle", s.quickToggle, alloc);
+  rapidjson::Value pose(rapidjson::kObjectType);
+  const PanelPose &p = s.pausePanel;
+  pose.AddMember("x", p.x, alloc);
+  pose.AddMember("y", p.y, alloc);
+  pose.AddMember("z", p.z, alloc);
+  pose.AddMember("qx", p.qx, alloc);
+  pose.AddMember("qy", p.qy, alloc);
+  pose.AddMember("qz", p.qz, alloc);
+  pose.AddMember("qw", p.qw, alloc);
+  doc.AddMember("pausePanel", pose, alloc);
 }
 
 } // namespace
@@ -67,6 +79,20 @@ void LoadConfig(const modloader::ModInfo &info) {
     boolean("hideMenuEnvironment", s.hideMenuEnvironment);
     boolean("distanceFog", s.distanceFog);
     boolean("quickToggle", s.quickToggle);
+    if (doc.HasMember("pausePanel") && doc["pausePanel"].IsObject()) {
+      auto &pose = doc["pausePanel"];
+      auto get = [&](const char *name, float &value) {
+        if (pose.HasMember(name) && pose[name].IsNumber()) value = pose[name].GetFloat();
+      };
+      PanelPose &p = s.pausePanel;
+      get("x", p.x);
+      get("y", p.y);
+      get("z", p.z);
+      get("qx", p.qx);
+      get("qy", p.qy);
+      get("qz", p.qz);
+      get("qw", p.qw);
+    }
   }
   CurrentSettings().Set(s);
   SaveConfig(); // normalise: every key present, values sanitized

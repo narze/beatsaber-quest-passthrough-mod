@@ -72,7 +72,7 @@ The mod must be an early mod. Normal mods load after the game creates its OpenXR
 
 ## Settings
 
-Settings are in the game in four places: Mod Settings > Passthrough, the "Passthrough" button in the main menu mod list, the "Passthrough" tab in the gameplay setup panel, and a panel at the left of the pause menu. Changes apply at once and are saved to `/sdcard/ModData/com.beatgames.beatsaber/Configs/Passthrough.json`.
+Settings are in the game in four places: Mod Settings > Passthrough, the "Passthrough" button in the main menu mod list, the "Passthrough" tab in the gameplay setup panel, and a "Passthrough" button at the left of the pause menu. That button opens the settings, and you can move it with the handle above it (the position is saved). Changes apply at once and are saved to `/sdcard/ModData/com.beatgames.beatsaber/Configs/Passthrough.json`.
 
 | Setting | Default | What it does |
 |---|---|---|

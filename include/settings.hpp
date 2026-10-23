@@ -6,12 +6,21 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <mutex>
 
 #include "xr_logic.hpp"
 
 namespace passthrough {
+
+// Where the pause menu panel is (meters, world space) and its rotation
+// (quaternion). Default: left of the pause menu, turned 35 degrees to the
+// player.
+struct PanelPose {
+  float x = -1.70f, y = 1.35f, z = 1.43f;
+  float qx = 0.0f, qy = -0.30071f, qz = 0.0f, qw = 0.95372f;
+};
 
 struct Settings {
   bool enabled = true; // master switch: off = the game exactly as without the mod
@@ -28,6 +37,7 @@ struct Settings {
   // Keep the game's bloom fog with a hidden environment. The fog fades far
   // notes in, but also tints them with the environment light.
   bool distanceFog = false;
+  PanelPose pausePanel;   // the user can move the panel; saved
   bool quickToggle = true; // A+B on the right controller toggles `enabled` in songs
   // Debug: draw the luma key as grayscale (white = game, black = room).
   // Not saved.
@@ -47,6 +57,18 @@ inline Settings Sanitize(Settings s) {
       s.keyLow = 1.0f - minGap;
       s.keyHigh = 1.0f;
     }
+  }
+  // Keep the pause panel within reach, so it cannot get lost.
+  PanelPose &p = s.pausePanel;
+  p.x = std::clamp(p.x, -3.0f, 3.0f);
+  p.y = std::clamp(p.y, 0.0f, 3.0f);
+  p.z = std::clamp(p.z, -3.0f, 3.0f);
+  float len = std::sqrt(p.qx * p.qx + p.qy * p.qy + p.qz * p.qz + p.qw * p.qw);
+  if (!(len > 0.001f)) { // also catches NaN
+    PanelPose def;
+    p.qx = def.qx, p.qy = def.qy, p.qz = def.qz, p.qw = def.qw;
+  } else {
+    p.qx /= len, p.qy /= len, p.qz /= len, p.qw /= len;
   }
   return s;
 }
