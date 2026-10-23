@@ -43,7 +43,7 @@ template <typename F> void change(F &&edit) {
 }
 
 struct Panel {
-  SafePtrUnity<BSML::ToggleSetting> enabled, hideSong, hideMenu, showMask;
+  SafePtrUnity<BSML::ToggleSetting> enabled, hideSong, hideMenu, fog, showMask;
   SafePtrUnity<BSML::SliderSetting> key, opacity;
 
   void Refresh() const {
@@ -53,6 +53,7 @@ struct Panel {
     enabled->set_Value(s.enabled);
     if (hideSong) hideSong->set_Value(s.hideEnvironment);
     if (hideMenu) hideMenu->set_Value(s.hideMenuEnvironment);
+    if (fog) fog->set_Value(s.distanceFog);
     if (key) key->set_Value(s.keyHigh);
     if (opacity) opacity->set_Value(s.opacity);
     if (showMask) showMask->set_Value(s.showMask);
@@ -73,6 +74,9 @@ void buildPanel(UnityEngine::Transform *parent) {
   });
   auto hideMenu = BSML::Lite::CreateToggle(parent, "Hide menu environment", s.hideMenuEnvironment,
                                            [](bool v) { change([v](Settings &x) { x.hideMenuEnvironment = v; }); });
+  auto fog = BSML::Lite::CreateToggle(parent, "Distance fog", s.distanceFog, [](bool v) {
+    change([v](Settings &x) { x.distanceFog = v; });
+  });
   // How dark a pixel must be to show the room. Higher = more see-through.
   auto key = BSML::Lite::CreateSliderSetting(parent, "See-through below brightness", 0.005f, s.keyHigh, 0.005f,
                                              0.2f, [](float v) {
@@ -90,7 +94,7 @@ void buildPanel(UnityEngine::Transform *parent) {
 
   // Drop panels whose scene is gone, then remember this one.
   std::erase_if(panels, [](const Panel &p) { return !p.enabled; });
-  panels.push_back(Panel{enabled, hideSong, hideMenu, showMask, key, opacity});
+  panels.push_back(Panel{enabled, hideSong, hideMenu, fog, showMask, key, opacity});
 }
 
 void refreshAll() {

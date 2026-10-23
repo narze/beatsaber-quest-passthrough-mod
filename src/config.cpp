@@ -13,6 +13,7 @@
 //   sourceAlpha: blend the game over passthrough with the game's alpha
 //   lumaKey:     replace the game's alpha with a brightness key (keyLow..keyHigh)
 //   hideEnvironment / hideMenuEnvironment: hide the environment renderers
+//   distanceFog: keep the bloom fog when the environment is hidden
 
 namespace passthrough {
 
@@ -33,6 +34,7 @@ void writeSettings(ConfigDocument &doc, const Settings &s) {
   doc.AddMember("keyHigh", s.keyHigh, alloc);
   doc.AddMember("hideEnvironment", s.hideEnvironment, alloc);
   doc.AddMember("hideMenuEnvironment", s.hideMenuEnvironment, alloc);
+  doc.AddMember("distanceFog", s.distanceFog, alloc);
 }
 
 } // namespace
@@ -61,6 +63,7 @@ void LoadConfig(const modloader::ModInfo &info) {
     number("keyHigh", s.keyHigh);
     boolean("hideEnvironment", s.hideEnvironment);
     boolean("hideMenuEnvironment", s.hideMenuEnvironment);
+    boolean("distanceFog", s.distanceFog);
   }
   CurrentSettings().Set(s);
   SaveConfig(); // normalise: every key present, values sanitized

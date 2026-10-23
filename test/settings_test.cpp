@@ -65,7 +65,22 @@ static void show_mask_is_off_by_default() {
   assert(!Settings{}.showMask); // debug view: never on unless asked for
 }
 
+static void bloom_fog_rules() {
+  Settings s; // passthrough on, environment hidden, distance fog off
+  assert(!WantBloomFog(true, s));
+  s.distanceFog = true;
+  assert(WantBloomFog(true, s));
+  assert(!WantBloomFog(false, s)); // never on when the game has it off
+  s.distanceFog = false;
+  s.hideEnvironment = false;
+  assert(WantBloomFog(true, s));
+  s.hideEnvironment = true;
+  s.enabled = false;
+  assert(WantBloomFog(true, s));
+}
+
 int main() {
+  bloom_fog_rules();
   show_mask_is_off_by_default();
   sanitize_clamps_ranges();
   sanitize_keeps_key_ordered();

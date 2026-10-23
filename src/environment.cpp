@@ -57,7 +57,7 @@ void applyFog(const passthrough::Settings &cfg) {
   for (auto fog : UnityEngine::Resources::FindObjectsOfTypeAll<GlobalNamespace::BloomFogSO *>()) {
     if (!fog) continue;
     if (!gameFogEnabled) gameFogEnabled = fog->get_bloomFogEnabled();
-    bool want = *gameFogEnabled && !(cfg.enabled && cfg.hideEnvironment);
+    bool want = passthrough::WantBloomFog(*gameFogEnabled, cfg);
     if (fog->get_bloomFogEnabled() != want) {
       fog->set_bloomFogEnabled(want);
       PaperLogger.info("bloom fog {}", want ? "on" : "off");

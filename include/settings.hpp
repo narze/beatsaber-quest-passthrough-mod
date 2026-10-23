@@ -25,6 +25,9 @@ struct Settings {
   float keyHigh = 0.015f;
   bool hideEnvironment = true;     // gameplay environments
   bool hideMenuEnvironment = true; // the main menu environment
+  // Keep the game's bloom fog with a hidden environment. The fog fades far
+  // notes in, but also tints them with the environment light.
+  bool distanceFog = false;
   // Debug: draw the luma key as grayscale (white = game, black = room).
   // Not saved.
   bool showMask = false;
@@ -45,6 +48,11 @@ inline Settings Sanitize(Settings s) {
     }
   }
   return s;
+}
+
+// Whether the game's bloom fog should be on. gameFog: the game's own value.
+inline bool WantBloomFog(bool gameFog, const Settings &s) {
+  return gameFog && (!s.enabled || !s.hideEnvironment || s.distanceFog);
 }
 
 // Thread-safe holder. Get() is cheap enough to call once per frame.
