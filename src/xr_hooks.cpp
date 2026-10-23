@@ -23,9 +23,7 @@ namespace {
 
 using namespace passthrough;
 
-// Phase 2: overlay at low opacity, to prove the layer works.
-constexpr LayerPlacement kPlacement = LayerPlacement::Overlay;
-constexpr float kOpacity = 0.3f;
+Settings settings; // set once in setup(), before any OpenXR call
 
 PFN_xrGetInstanceProcAddr realGetInstanceProcAddr = nullptr;
 PFN_xrCreateInstance realCreateInstance = nullptr;
@@ -100,7 +98,7 @@ void createPassthroughLocked(XrSession s) {
   }
 
   XrPassthroughStyleFB style{XR_TYPE_PASSTHROUGH_STYLE_FB};
-  style.textureOpacityFactor = kOpacity;
+  style.textureOpacityFactor = settings.opacity;
   style.edgeColor = {0, 0, 0, 0};
   logResult("xrPassthroughLayerSetStyleFB", setPassthroughStyle(layer, &style));
 
@@ -185,9 +183,15 @@ XRAPI_ATTR XrResult XRAPI_CALL EndFrame(XrSession s, const XrFrameEndInfo *info)
   ptLayer.space = XR_NULL_HANDLE;
   ptLayer.layerHandle = layer;
 
-  auto layers = WithPassthroughLayer(info->layers, info->layerCount,
+  // Underlay: the game must be blended over the passthrough with its alpha.
+  thread_local std::vector<XrCompositionLayerProjection> projStorage;
+  auto gameLayers = settings.sourceAlpha
+                        ? WithSourceAlpha(info->layers, info->layerCount, projStorage)
+                        : std::vector<const XrCompositionLayerBaseHeader *>(
+                              info->layers, info->layers + info->layerCount);
+  auto layers = WithPassthroughLayer(gameLayers.data(), static_cast<uint32_t>(gameLayers.size()),
                                      reinterpret_cast<const XrCompositionLayerBaseHeader *>(&ptLayer),
-                                     kPlacement);
+                                     settings.placement);
   XrFrameEndInfo patched = *info;
   patched.layerCount = static_cast<uint32_t>(layers.size());
   patched.layers = layers.data();
@@ -227,7 +231,11 @@ MAKE_HOOK_NO_CATCH(xrGetInstanceProcAddr_hook, nullptr, XrResult, XrInstance ins
 
 namespace passthrough {
 
-void InstallXrHooks() {
+void InstallXrHooks(const Settings &s) {
+  settings = s;
+  PaperLogger.info("settings: placement={} opacity={} sourceAlpha={}",
+                   settings.placement == LayerPlacement::Underlay ? "underlay" : "overlay",
+                   settings.opacity, settings.sourceAlpha);
   // The game's OpenXR loader lives in the APK lib dir. Loading it here (if
   // libunity has not yet) gives the same instance OVRPlugin uses later.
   void *loader = dlopen("libopenxr_loader.so", RTLD_NOW);

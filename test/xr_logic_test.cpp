@@ -66,7 +66,46 @@ static void respects_max_layer_count() {
   assert(out.size() == 2 && out[0] == &proj && out[1] == &proj);
 }
 
+static void source_alpha_only_on_projection_layers() {
+  XrCompositionLayerProjection proj{};
+  proj.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
+  proj.layerFlags = XR_COMPOSITION_LAYER_CORRECT_CHROMATIC_ABERRATION_BIT;
+  XrCompositionLayerQuad quad{};
+  quad.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
+  const XrCompositionLayerBaseHeader *in[] = {
+      reinterpret_cast<const XrCompositionLayerBaseHeader *>(&proj),
+      reinterpret_cast<const XrCompositionLayerBaseHeader *>(&quad)};
+  std::vector<XrCompositionLayerProjection> storage;
+  auto out = WithSourceAlpha(in, 2, storage);
+  assert(out.size() == 2);
+  // Projection layer is a modified copy; the game's struct stays unchanged.
+  assert(out[0] != in[0]);
+  auto *copy = reinterpret_cast<const XrCompositionLayerProjection *>(out[0]);
+  assert(copy->layerFlags == (XR_COMPOSITION_LAYER_CORRECT_CHROMATIC_ABERRATION_BIT |
+                              XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT));
+  assert(proj.layerFlags == XR_COMPOSITION_LAYER_CORRECT_CHROMATIC_ABERRATION_BIT);
+  // Other layers pass through as they are.
+  assert(out[1] == in[1]);
+}
+
+static void source_alpha_storage_survives_many_layers() {
+  XrCompositionLayerProjection a{};
+  a.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
+  XrCompositionLayerProjection b{};
+  b.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
+  const XrCompositionLayerBaseHeader *in[] = {
+      reinterpret_cast<const XrCompositionLayerBaseHeader *>(&a),
+      reinterpret_cast<const XrCompositionLayerBaseHeader *>(&b)};
+  std::vector<XrCompositionLayerProjection> storage;
+  auto out = WithSourceAlpha(in, 2, storage);
+  // Pointers must stay valid (no reallocation after taking them).
+  assert(out[0] == reinterpret_cast<const XrCompositionLayerBaseHeader *>(&storage[0]));
+  assert(out[1] == reinterpret_cast<const XrCompositionLayerBaseHeader *>(&storage[1]));
+}
+
 int main() {
+  source_alpha_only_on_projection_layers();
+  source_alpha_storage_survives_many_layers();
   adds_missing_extension();
   keeps_existing_extension_once();
   handles_empty_extension_list();

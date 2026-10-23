@@ -43,4 +43,27 @@ WithPassthroughLayer(const XrCompositionLayerBaseHeader *const *layers, uint32_t
   return out;
 }
 
+// Returns the frame's layers, with every projection layer replaced by a copy
+// that has XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT set, so the
+// compositor blends the game over the layers below it using the game's alpha.
+// The copies live in `storage`, which must outlive the returned pointers.
+inline std::vector<const XrCompositionLayerBaseHeader *>
+WithSourceAlpha(const XrCompositionLayerBaseHeader *const *layers, uint32_t count,
+                std::vector<XrCompositionLayerProjection> &storage) {
+  storage.clear();
+  storage.reserve(count); // no reallocation, so pointers stay valid
+  std::vector<const XrCompositionLayerBaseHeader *> out;
+  out.reserve(count);
+  for (uint32_t i = 0; i < count; i++) {
+    if (layers[i]->type != XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
+      out.push_back(layers[i]);
+      continue;
+    }
+    auto &copy = storage.emplace_back(*reinterpret_cast<const XrCompositionLayerProjection *>(layers[i]));
+    copy.layerFlags |= XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+    out.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader *>(&copy));
+  }
+  return out;
+}
+
 } // namespace passthrough
