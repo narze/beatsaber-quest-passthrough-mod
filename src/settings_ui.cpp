@@ -16,6 +16,7 @@
 #include "GlobalNamespace/OVRInput.hpp"
 #include "GlobalNamespace/PauseMenuManager.hpp"
 #include "UnityEngine/GameObject.hpp"
+#include "UnityEngine/RectTransform.hpp"
 #include "UnityEngine/UI/Button.hpp"
 #include "UnityEngine/Transform.hpp"
 #include "beatsaber-hook/shared/utils/typedefs-wrappers.hpp"
@@ -164,8 +165,15 @@ void showPausePanel(bool show) {
     auto settings = BSML::Lite::CreateScrollableSettingsContainer(screen->get_transform());
     BSML::Lite::CreateUIButton(settings->get_transform(), "Close", [] { setPauseExpanded(false); });
     buildPanel(settings->get_transform());
-    auto openButton = BSML::Lite::CreateUIButton(screen->get_transform(), "Passthrough", UnityEngine::Vector2{0, 0},
-                                                 kCollapsedSize, [] { setPauseExpanded(true); });
+    auto openButton = BSML::Lite::CreateUIButton(screen->get_transform(), "Passthrough",
+                                                 [] { setPauseExpanded(true); });
+    // BSML anchors the button to a corner; stretch it over the whole screen.
+    auto rect = openButton->get_transform().cast<UnityEngine::RectTransform>();
+    rect->set_anchorMin({0, 0});
+    rect->set_anchorMax({1, 1});
+    rect->set_pivot({0.5f, 0.5f});
+    rect->set_anchoredPosition({0, 0});
+    rect->set_sizeDelta({0, 0});
     pauseScreen.emplace(PauseScreen{screen, openButton->get_gameObject().ptr(), settings});
   }
   if (pauseScreen && pauseScreen->screen) {
