@@ -7,7 +7,10 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 PKG=com.beatgames.beatsaber
-MODS_DIR=/sdcard/ModData/$PKG/Modloader/mods
+# Early mod: the OpenXR hooks must be in place before the game creates its
+# OpenXR instance, and normal mods load after that.
+MODS_DIR=/sdcard/ModData/$PKG/Modloader/early_mods
+OLD_PATH=/sdcard/ModData/$PKG/Modloader/mods/libPassthrough.so
 SO=build/libPassthrough.so
 NDK_LINK=$HOME/.local/share/android-ndk-qpm   # cmake rejects NDK paths with spaces
 LAUNCH=1 LOG=1
@@ -34,9 +37,12 @@ mise exec -- cmake --build build
 
 # 3. Push
 adb push "$SO" "$MODS_DIR/" | tail -1
+adb shell rm -f "$OLD_PATH"   # our own file from the hello-world stage
 [ $LAUNCH = 1 ] || exit 0
 
-# 4. Restart the game
+# 4. Restart the game. Keep it running when the headset is off
+#    (proximity sensor override, resets on reboot).
+adb shell am broadcast -a com.oculus.vrpowermanager.prox_close >/dev/null
 adb shell am force-stop $PKG
 adb shell am start -n $PKG/com.unity3d.player.UnityPlayerActivity >/dev/null
 pid=""
