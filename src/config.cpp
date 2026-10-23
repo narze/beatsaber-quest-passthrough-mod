@@ -14,6 +14,7 @@
 //   lumaKey:     replace the game's alpha with a brightness key (keyLow..keyHigh)
 //   hideEnvironment / hideMenuEnvironment: hide the environment renderers
 //   distanceFog: keep the bloom fog when the environment is hidden
+//   quickToggle: A+B on the right controller toggles passthrough in songs
 
 namespace passthrough {
 
@@ -35,6 +36,7 @@ void writeSettings(ConfigDocument &doc, const Settings &s) {
   doc.AddMember("hideEnvironment", s.hideEnvironment, alloc);
   doc.AddMember("hideMenuEnvironment", s.hideMenuEnvironment, alloc);
   doc.AddMember("distanceFog", s.distanceFog, alloc);
+  doc.AddMember("quickToggle", s.quickToggle, alloc);
 }
 
 } // namespace
@@ -64,6 +66,7 @@ void LoadConfig(const modloader::ModInfo &info) {
     boolean("hideEnvironment", s.hideEnvironment);
     boolean("hideMenuEnvironment", s.hideMenuEnvironment);
     boolean("distanceFog", s.distanceFog);
+    boolean("quickToggle", s.quickToggle);
   }
   CurrentSettings().Set(s);
   SaveConfig(); // normalise: every key present, values sanitized
