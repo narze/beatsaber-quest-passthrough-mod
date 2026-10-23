@@ -66,4 +66,5 @@ cmake-build-*/
 extern.cmake
 
 # QMOD Schema
-mod.json.schemabuild-test/
+mod.json.schema
+build-test/
