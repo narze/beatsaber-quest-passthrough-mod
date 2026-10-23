@@ -13,10 +13,12 @@
 #include <string>
 #include <vector>
 
+#include "GlobalNamespace/BloomFogSO.hpp"
 #include "GlobalNamespace/MainCameraCullingMask.hpp"
 #include "UnityEngine/Camera.hpp"
 #include "UnityEngine/GameObject.hpp"
 #include "UnityEngine/Renderer.hpp"
+#include "UnityEngine/Resources.hpp"
 #include "UnityEngine/SceneManagement/LoadSceneMode.hpp"
 #include "UnityEngine/SceneManagement/Scene.hpp"
 #include "UnityEngine/SceneManagement/SceneManager.hpp"
@@ -45,6 +47,23 @@ std::vector<HiddenRenderer> hidden; // main thread only
 // spawned into GameCore, so for songs we also cull the environment layers.
 std::optional<SafePtrUnity<UnityEngine::Camera>> gameplayCamera; // not assignable, so optional
 int gameplayCameraMask = 0;
+
+// Bloom fog tints distant objects (far notes) with the environment light
+// texture, so it goes with the environment. We keep the game's own value to
+// restore it.
+std::optional<bool> gameFogEnabled;
+
+void applyFog(const passthrough::Settings &cfg) {
+  for (auto fog : UnityEngine::Resources::FindObjectsOfTypeAll<GlobalNamespace::BloomFogSO *>()) {
+    if (!fog) continue;
+    if (!gameFogEnabled) gameFogEnabled = fog->get_bloomFogEnabled();
+    bool want = *gameFogEnabled && !(cfg.enabled && cfg.hideEnvironment);
+    if (fog->get_bloomFogEnabled() != want) {
+      fog->set_bloomFogEnabled(want);
+      PaperLogger.info("bloom fog {}", want ? "on" : "off");
+    }
+  }
+}
 
 void applyCullingMask(const passthrough::Settings &cfg) {
   if (!gameplayCamera || !*gameplayCamera) return;
@@ -155,6 +174,7 @@ MAKE_HOOK_MATCH(MainCameraCullingMask_Start, &GlobalNamespace::MainCameraCulling
   gameplayCamera.emplace(camera.ptr());
   gameplayCameraMask = camera->get_cullingMask();
   applyCullingMask(passthrough::CurrentSettings().Get());
+  applyFog(passthrough::CurrentSettings().Get());
 }
 
 namespace passthrough {
@@ -167,6 +187,7 @@ void InstallEnvironmentHooks() {
 void ApplyEnvironment() {
   const Settings cfg = CurrentSettings().Get();
   applyCullingMask(cfg);
+  applyFog(cfg);
 
   // Show again what should no longer be hidden; forget destroyed renderers.
   // (SafePtrUnity cannot be assigned, so build a new list instead of erase_if.)
