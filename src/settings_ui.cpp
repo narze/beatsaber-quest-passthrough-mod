@@ -128,7 +128,7 @@ void gameplaySetupDidActivate(UnityEngine::GameObject *self, bool firstActivatio
 // A small "Passthrough" button that opens the settings. The user can move
 // it with the handle above it; the position is saved. It opens closed on
 // every pause, so it does not cover the pause menu.
-constexpr UnityEngine::Vector2 kCollapsedSize{34, 10};
+constexpr UnityEngine::Vector2 kCollapsedSize{50, 12}; // 34 x 10 clipped the button text
 constexpr UnityEngine::Vector2 kExpandedSize{100, 60}; // 70 wide clipped the settings rows
 
 struct PauseScreen {
