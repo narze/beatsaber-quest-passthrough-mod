@@ -113,8 +113,10 @@ std::optional<SafePtrUnity<BSML::FloatingScreen>> pauseScreen; // optional: not 
 
 void showPausePanel(bool show) {
   if (show && (!pauseScreen || !*pauseScreen)) {
-    // Left of the pause menu, turned towards the player.
-    auto screen = BSML::Lite::CreateFloatingScreen({70, 55}, {-1.45f, 1.35f, 1.6f}, {0, -35, 0}, 0.0f, true, false);
+    // Left of the pause menu, turned towards the player. 100 wide: the
+    // settings rows need it (70 clipped the labels and the slider values).
+    // The right edge stays where it was, clear of the pause menu.
+    auto screen = BSML::Lite::CreateFloatingScreen({100, 60}, {-1.70f, 1.35f, 1.43f}, {0, -35, 0}, 0.0f, true, false);
     auto container = BSML::Lite::CreateScrollableSettingsContainer(screen->get_transform());
     buildPanel(container->get_transform());
     pauseScreen.emplace(screen);
