@@ -15,6 +15,7 @@ static modloader::ModInfo modInfo{MOD_ID, VERSION, 0};
 //   placement: "underlay" (background) or "overlay" (on top, for testing)
 //   opacity:   0..1, passthrough opacity
 //   sourceAlpha: blend the game over passthrough with the game's alpha
+//   lumaKey:   replace the game's alpha with a brightness key (keyLow..keyHigh)
 static passthrough::Settings loadSettings() {
   passthrough::Settings s;
   Configuration config(modInfo);
@@ -46,6 +47,23 @@ static passthrough::Settings loadSettings() {
     changed = true;
   }
   s.sourceAlpha = doc["sourceAlpha"].GetBool();
+
+  auto number = [&](const char *name, float &value) {
+    if (!doc.HasMember(name) || !doc[name].IsNumber()) {
+      doc.RemoveMember(name);
+      doc.AddMember(rapidjson::Value(name, alloc).Move(), rapidjson::Value(value).Move(), alloc);
+      changed = true;
+    }
+    value = doc[name].GetFloat();
+  };
+  if (!doc.HasMember("lumaKey") || !doc["lumaKey"].IsBool()) {
+    doc.RemoveMember("lumaKey");
+    doc.AddMember("lumaKey", s.lumaKey, alloc);
+    changed = true;
+  }
+  s.lumaKey = doc["lumaKey"].GetBool();
+  number("keyLow", s.keyLow);
+  number("keyHigh", s.keyHigh);
 
   if (changed) config.Write();
   return s;

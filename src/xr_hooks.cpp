@@ -7,16 +7,27 @@
 //   xrCreateSession   - create the passthrough feature + layer
 //   xrEndFrame        - add the passthrough composition layer to every frame
 //   xrDestroySession / xrDestroyInstance - clean up
+//   xrCreateSwapchain / xrEnumerateSwapchainImages / xrAcquireSwapchainImage
+//                     - track the GL texture of each eye-buffer image
+//   xrReleaseSwapchainImage - run the brightness alpha key on the eye buffer
+//                     (see alpha_pass.hpp) before the compositor gets it
 
 #include "xr_hooks.hpp"
 
+#include <EGL/egl.h>
+#include <GLES3/gl3.h>
 #include <dlfcn.h>
 
 #include <atomic>
 #include <cstring>
 #include <mutex>
 
+#define XR_USE_GRAPHICS_API_OPENGL_ES
+#include "openxr/openxr_platform.h"
+
+#include "alpha_pass.hpp"
 #include "main.hpp"
+#include "swapchain_registry.hpp"
 #include "xr_logic.hpp"
 
 namespace {
@@ -31,6 +42,16 @@ PFN_xrDestroyInstance realDestroyInstance = nullptr;
 PFN_xrCreateSession realCreateSession = nullptr;
 PFN_xrDestroySession realDestroySession = nullptr;
 PFN_xrEndFrame realEndFrame = nullptr;
+PFN_xrCreateSwapchain realCreateSwapchain = nullptr;
+PFN_xrDestroySwapchain realDestroySwapchain = nullptr;
+PFN_xrEnumerateSwapchainImages realEnumerateSwapchainImages = nullptr;
+PFN_xrAcquireSwapchainImage realAcquireSwapchainImage = nullptr;
+PFN_xrReleaseSwapchainImage realReleaseSwapchainImage = nullptr;
+
+SwapchainRegistry swapchains;
+AlphaPass alphaPass; // render thread only
+
+uint64_t key(XrSwapchain s) { return reinterpret_cast<uint64_t>(s); }
 
 PFN_xrCreatePassthroughFB createPassthrough = nullptr;
 PFN_xrDestroyPassthroughFB destroyPassthrough = nullptr;
@@ -192,6 +213,16 @@ XRAPI_ATTR XrResult XRAPI_CALL EndFrame(XrSession s, const XrFrameEndInfo *info)
   auto layers = WithPassthroughLayer(gameLayers.data(), static_cast<uint32_t>(gameLayers.size()),
                                      reinterpret_cast<const XrCompositionLayerBaseHeader *>(&ptLayer),
                                      settings.placement);
+  if (settings.lumaKey) {
+    for (uint32_t i = 0; i < info->layerCount; i++) {
+      if (info->layers[i]->type != XR_TYPE_COMPOSITION_LAYER_PROJECTION) continue;
+      auto *proj = reinterpret_cast<const XrCompositionLayerProjection *>(info->layers[i]);
+      for (uint32_t v = 0; v < proj->viewCount; v++) {
+        swapchains.MarkProjection(key(proj->views[v].subImage.swapchain));
+      }
+    }
+  }
+
   XrFrameEndInfo patched = *info;
   patched.layerCount = static_cast<uint32_t>(layers.size());
   patched.layers = layers.data();
@@ -203,6 +234,54 @@ XRAPI_ATTR XrResult XRAPI_CALL EndFrame(XrSession s, const XrFrameEndInfo *info)
                      static_cast<int>(r));
   }
   return r;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL CreateSwapchain(XrSession s, const XrSwapchainCreateInfo *info,
+                                               XrSwapchain *out) {
+  XrResult r = realCreateSwapchain(s, info, out);
+  if (XR_SUCCEEDED(r)) {
+    swapchains.OnCreate(key(*out), {info->width, info->height, info->arraySize, info->format});
+    PaperLogger.info("xrCreateSwapchain {}x{}x{} format 0x{:x} usage 0x{:x} samples {}", info->width,
+                     info->height, info->arraySize, info->format, info->usageFlags, info->sampleCount);
+  }
+  return r;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL DestroySwapchain(XrSwapchain sc) {
+  swapchains.OnDestroy(key(sc));
+  return realDestroySwapchain(sc);
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL EnumerateSwapchainImages(XrSwapchain sc, uint32_t capacity,
+                                                        uint32_t *count,
+                                                        XrSwapchainImageBaseHeader *images) {
+  XrResult r = realEnumerateSwapchainImages(sc, capacity, count, images);
+  if (XR_SUCCEEDED(r) && images && capacity > 0 &&
+      images->type == XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR) {
+    auto *gl = reinterpret_cast<XrSwapchainImageOpenGLESKHR *>(images);
+    std::vector<uint32_t> textures;
+    for (uint32_t i = 0; i < *count; i++) textures.push_back(gl[i].image);
+    swapchains.OnImages(key(sc), std::move(textures));
+  }
+  return r;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL AcquireSwapchainImage(XrSwapchain sc,
+                                                     const XrSwapchainImageAcquireInfo *info,
+                                                     uint32_t *index) {
+  XrResult r = realAcquireSwapchainImage(sc, info, index);
+  if (XR_SUCCEEDED(r)) swapchains.OnAcquire(key(sc), *index);
+  return r;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL ReleaseSwapchainImage(XrSwapchain sc,
+                                                     const XrSwapchainImageReleaseInfo *info) {
+  if (settings.lumaKey && layerHandle.load() != XR_NULL_HANDLE) {
+    if (auto target = swapchains.ReleaseTarget(key(sc))) {
+      alphaPass.Apply(*target, settings.keyLow, settings.keyHigh);
+    }
+  }
+  return realReleaseSwapchainImage(sc, info);
 }
 
 // Swap one of our wrappers in for `name`, keeping the real pointer.
@@ -225,7 +304,15 @@ MAKE_HOOK_NO_CATCH(xrGetInstanceProcAddr_hook, nullptr, XrResult, XrInstance ins
       intercept(name, "xrDestroyInstance", fn, realDestroyInstance, &DestroyInstance) ||
       intercept(name, "xrCreateSession", fn, realCreateSession, &CreateSession) ||
       intercept(name, "xrDestroySession", fn, realDestroySession, &DestroySession) ||
-      intercept(name, "xrEndFrame", fn, realEndFrame, &EndFrame);
+      intercept(name, "xrEndFrame", fn, realEndFrame, &EndFrame) ||
+      intercept(name, "xrCreateSwapchain", fn, realCreateSwapchain, &CreateSwapchain) ||
+      intercept(name, "xrDestroySwapchain", fn, realDestroySwapchain, &DestroySwapchain) ||
+      intercept(name, "xrEnumerateSwapchainImages", fn, realEnumerateSwapchainImages,
+                &EnumerateSwapchainImages) ||
+      intercept(name, "xrAcquireSwapchainImage", fn, realAcquireSwapchainImage,
+                &AcquireSwapchainImage) ||
+      intercept(name, "xrReleaseSwapchainImage", fn, realReleaseSwapchainImage,
+                &ReleaseSwapchainImage);
   return r;
 }
 
@@ -233,9 +320,10 @@ namespace passthrough {
 
 void InstallXrHooks(const Settings &s) {
   settings = s;
-  PaperLogger.info("settings: placement={} opacity={} sourceAlpha={}",
+  PaperLogger.info("settings: placement={} opacity={} sourceAlpha={} lumaKey={} key={}..{}",
                    settings.placement == LayerPlacement::Underlay ? "underlay" : "overlay",
-                   settings.opacity, settings.sourceAlpha);
+                   settings.opacity, settings.sourceAlpha, settings.lumaKey, settings.keyLow,
+                   settings.keyHigh);
   // The game's OpenXR loader lives in the APK lib dir. Loading it here (if
   // libunity has not yet) gives the same instance OVRPlugin uses later.
   void *loader = dlopen("libopenxr_loader.so", RTLD_NOW);
