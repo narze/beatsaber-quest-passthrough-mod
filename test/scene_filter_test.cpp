@@ -5,6 +5,7 @@
 #include <cstdio>
 
 using passthrough::IsEnvironmentScene;
+using passthrough::ShouldHideScene;
 
 static void gameplay_environments_match() {
   assert(IsEnvironmentScene("DefaultEnvironment", false));
@@ -28,7 +29,17 @@ static void menu_environment_only_when_enabled() {
   assert(!IsEnvironmentScene("MenuEnvironment", false));
 }
 
+static void song_and_menu_toggles_are_independent() {
+  // hideSong, hideMenu
+  assert(ShouldHideScene("DefaultEnvironment", true, false));
+  assert(!ShouldHideScene("DefaultEnvironment", false, true));
+  assert(ShouldHideScene("MainMenuEnvironment", false, true)); // the reported bug
+  assert(!ShouldHideScene("MainMenuEnvironment", true, false));
+  assert(!ShouldHideScene("GameCore", true, true));
+}
+
 int main() {
+  song_and_menu_toggles_are_independent();
   gameplay_environments_match();
   core_scenes_never_match();
   menu_environment_only_when_enabled();

@@ -19,6 +19,8 @@
 #include "UnityEngine/SceneManagement/SceneManager.hpp"
 #include "UnityEngine/Transform.hpp"
 #include "beatsaber-hook/shared/utils/typedefs-wrappers.hpp"
+#include "bsml/shared/BSML/MainThreadScheduler.hpp"
+#include "diagnostics.hpp"
 #include "main.hpp"
 #include "scene_filter.hpp"
 #include "settings.hpp"
@@ -35,8 +37,8 @@ struct HiddenRenderer {
 std::vector<HiddenRenderer> hidden; // main thread only
 
 bool shouldHide(const std::string &scene, const passthrough::Settings &cfg) {
-  return cfg.enabled && cfg.hideEnvironment &&
-         passthrough::IsEnvironmentScene(scene, cfg.hideMenuEnvironment);
+  return cfg.enabled &&
+         passthrough::ShouldHideScene(scene, cfg.hideEnvironment, cfg.hideMenuEnvironment);
 }
 
 // The main menu environment is not its own scene: it lives in "MainMenu"
@@ -122,6 +124,9 @@ MAKE_HOOK_MATCH(SceneManager_Internal_SceneLoaded,
     if (shouldHide(kMenuEnvironment, passthrough::CurrentSettings().Get())) hideMenuEnvironment(scene);
   }
   if (hide) hideScene(scene, name);
+  // Debug: what still draws after hiding (temporary)
+  if (name == "GameCore") BSML::MainThreadScheduler::ScheduleAfterTime(5.0f, [] { passthrough::DumpRenderState("song"); });
+  if (name == kMenuScene) BSML::MainThreadScheduler::ScheduleAfterTime(3.0f, [] { passthrough::DumpRenderState("menu"); });
 }
 
 namespace passthrough {

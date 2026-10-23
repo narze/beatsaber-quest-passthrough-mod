@@ -14,4 +14,12 @@ inline bool IsEnvironmentScene(std::string_view name, bool includeMenu) {
   return !menu || includeMenu;
 }
 
+// Whether to hide an environment scene: song environments follow `hideSong`,
+// menu environments follow `hideMenu`, independently.
+inline bool ShouldHideScene(std::string_view name, bool hideSong, bool hideMenu) {
+  if (!IsEnvironmentScene(name, true)) return false;
+  bool menu = name.find("Menu") != std::string_view::npos;
+  return menu ? hideMenu : hideSong;
+}
+
 } // namespace passthrough
