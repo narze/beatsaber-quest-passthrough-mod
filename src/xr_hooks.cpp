@@ -26,6 +26,7 @@
 #include "openxr/openxr_platform.h"
 
 #include "alpha_pass.hpp"
+#include "frame_stats.hpp"
 #include "main.hpp"
 #include "swapchain_registry.hpp"
 #include "xr_logic.hpp"
@@ -196,9 +197,34 @@ XRAPI_ATTR XrResult XRAPI_CALL DestroySession(XrSession s) {
   return realDestroySession(s);
 }
 
+// Frame timing log: every 10 s, the intervals between the display times the
+// game submits. A frame that misses a refresh shows as a double interval.
+// Render thread only.
+FrameStats frameStats;
+XrTime lastDisplayTime = 0;
+XrTime windowStart = 0;
+
+void recordFrameTiming(XrTime displayTime, bool passthroughOn) {
+  if (lastDisplayTime != 0 && displayTime > lastDisplayTime) {
+    frameStats.Add(static_cast<double>(displayTime - lastDisplayTime) / 1e6);
+  }
+  lastDisplayTime = displayTime;
+  if (windowStart == 0) windowStart = displayTime;
+  if (displayTime - windowStart < 10'000'000'000LL) return;
+  double target = frameStats.MinMs();
+  PaperLogger.info("frame timing (passthrough {}): {} frames, avg {:.2f} ms ({:.1f} fps), target {:.2f} ms, "
+                   "worst {:.2f} ms, slow frames {}",
+                   passthroughOn ? "on" : "off", frameStats.Frames(), frameStats.AverageMs(),
+                   frameStats.AverageMs() > 0 ? 1000.0 / frameStats.AverageMs() : 0.0, target,
+                   frameStats.WorstMs(), frameStats.SlowFrames(target));
+  frameStats.Reset();
+  windowStart = displayTime;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL EndFrame(XrSession s, const XrFrameEndInfo *info) {
   XrPassthroughLayerFB layer = layerHandle.load();
   const Settings cfg = CurrentSettings().Get();
+  recordFrameTiming(info->displayTime, cfg.enabled);
   if (!cfg.enabled || layer == XR_NULL_HANDLE || s != session.load()) return realEndFrame(s, info);
 
   if (cfg.opacity != appliedOpacity.load()) {
