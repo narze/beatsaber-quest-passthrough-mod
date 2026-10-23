@@ -1,0 +1,41 @@
+{
+  "version": "0.4.0",
+  "sharedDir": "shared",
+  "dependenciesDir": "extern",
+  "info": {
+    "name": "Passthrough",
+    "id": "Passthrough",
+    "version": "0.1.0",
+    "url": null,
+    "additionalData": {
+      "overrideSoName": "libPassthrough.so",
+      "cmake": true
+    }
+  },
+  "workspace": {
+    "scripts": {},
+    "ndk": "^27.2.12479018",
+    "qmodIncludeDirs": ["./build", "./extern/libs"],
+    "qmodIncludeFiles": [],
+    "qmodOutput": "./Passthrough.qmod"
+  },
+  "dependencies": [
+    {
+      "id": "beatsaber-hook",
+      "versionRange": "^6.4.2",
+      "additionalData": {}
+    },
+    {
+      "id": "paper2_scotland2",
+      "versionRange": "=4.7.0",
+      "additionalData": {}
+    },
+    {
+      "id": "scotland2",
+      "versionRange": "^0.1.6",
+      "additionalData": {
+        "includeQmod": false
+      }
+    }
+  ]
+}

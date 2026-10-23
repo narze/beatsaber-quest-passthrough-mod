@@ -1,0 +1,3 @@
+[tools]
+cmake = "3"
+ninja = "latest"
