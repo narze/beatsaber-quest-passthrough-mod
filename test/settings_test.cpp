@@ -61,7 +61,12 @@ static void live_settings_concurrent_reads() {
   writer.join();
 }
 
+static void show_mask_is_off_by_default() {
+  assert(!Settings{}.showMask); // debug view: never on unless asked for
+}
+
 int main() {
+  show_mask_is_off_by_default();
   sanitize_clamps_ranges();
   sanitize_keeps_key_ordered();
   sanitize_keeps_valid_values();

@@ -25,6 +25,9 @@ struct Settings {
   float keyHigh = 0.015f;
   bool hideEnvironment = true;     // gameplay environments
   bool hideMenuEnvironment = true; // the main menu environment
+  // Debug: draw the luma key as grayscale (white = game, black = room).
+  // Not saved.
+  bool showMask = false;
 };
 
 // Clamps values to valid ranges and keeps keyLow < keyHigh.

@@ -21,10 +21,12 @@ constexpr const char *kFragmentShader = R"(#version 300 es
 #extension GL_EXT_shader_framebuffer_fetch : require
 precision highp float;
 uniform vec2 uKey;
+uniform bool uShowMask;
 inout vec4 oColor; // framebuffer fetch: the pixel the game rendered
 void main() {
   float m = max(oColor.r, max(oColor.g, oColor.b));
   oColor.a = smoothstep(uKey.x, uKey.y, m);
+  if (uShowMask) oColor = vec4(vec3(oColor.a), 1.0);
 }
 )";
 
@@ -101,13 +103,14 @@ bool AlphaPass::Init() {
     return false;
   }
   keyLocation_ = glGetUniformLocation(program_, "uKey");
+  showMaskLocation_ = glGetUniformLocation(program_, "uShowMask");
   glGenVertexArrays(1, &vao_);
   glGenFramebuffers(1, &fbo_);
   PaperLogger.info("alpha pass: ready (program {}, vao {}, fbo {})", program_, vao_, fbo_);
   return true;
 }
 
-bool AlphaPass::Apply(const ReleaseTargetInfo &target, float low, float high) {
+bool AlphaPass::Apply(const ReleaseTargetInfo &target, float low, float high, bool showMask) {
   if (failed_) return false;
   if (eglGetCurrentContext() == EGL_NO_CONTEXT) {
     PaperLogger.error("alpha pass: no GL context on this thread, disabled");
@@ -131,6 +134,7 @@ bool AlphaPass::Apply(const ReleaseTargetInfo &target, float low, float high) {
   glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
   glUseProgram(program_);
   glUniform2f(keyLocation_, low, high);
+  glUniform1i(showMaskLocation_, showMask ? 1 : 0);
   glBindVertexArray(vao_);
 
   uint32_t layers = target.info.arraySize > 0 ? target.info.arraySize : 1;

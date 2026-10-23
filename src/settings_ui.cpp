@@ -43,7 +43,7 @@ template <typename F> void change(F &&edit) {
 }
 
 struct Panel {
-  SafePtrUnity<BSML::ToggleSetting> enabled, hideSong, hideMenu;
+  SafePtrUnity<BSML::ToggleSetting> enabled, hideSong, hideMenu, showMask;
   SafePtrUnity<BSML::SliderSetting> key, opacity;
 
   void Refresh() const {
@@ -55,6 +55,7 @@ struct Panel {
     if (hideMenu) hideMenu->set_Value(s.hideMenuEnvironment);
     if (key) key->set_Value(s.keyHigh);
     if (opacity) opacity->set_Value(s.opacity);
+    if (showMask) showMask->set_Value(s.showMask);
     refreshing = false;
   }
 };
@@ -82,10 +83,14 @@ void buildPanel(UnityEngine::Transform *parent) {
                                              });
   auto opacity = BSML::Lite::CreateSliderSetting(parent, "Room brightness (opacity)", 0.05f, s.opacity, 0.0f, 1.0f,
                                                  [](float v) { change([v](Settings &x) { x.opacity = v; }); });
+  // Debug: white = game, black = room. Shows what the brightness key keeps.
+  auto showMask = BSML::Lite::CreateToggle(parent, "Debug: show see-through mask", s.showMask, [](bool v) {
+    change([v](Settings &x) { x.showMask = v; });
+  });
 
   // Drop panels whose scene is gone, then remember this one.
   std::erase_if(panels, [](const Panel &p) { return !p.enabled; });
-  panels.push_back(Panel{enabled, hideSong, hideMenu, key, opacity});
+  panels.push_back(Panel{enabled, hideSong, hideMenu, showMask, key, opacity});
 }
 
 void refreshAll() {

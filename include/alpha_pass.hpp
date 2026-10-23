@@ -18,7 +18,8 @@ namespace passthrough {
 class AlphaPass {
 public:
   // Returns false if the pass could not run (the frame is left unchanged).
-  bool Apply(const ReleaseTargetInfo &target, float low, float high);
+  // showMask: debug, write the key as an opaque grayscale image.
+  bool Apply(const ReleaseTargetInfo &target, float low, float high, bool showMask = false);
 
 private:
   bool Init();
@@ -28,6 +29,7 @@ private:
   uint32_t vao_ = 0;
   uint32_t fbo_ = 0;
   int32_t keyLocation_ = -1;
+  int32_t showMaskLocation_ = -1;
   uint64_t applied_ = 0;
 };
 

@@ -290,7 +290,7 @@ XRAPI_ATTR XrResult XRAPI_CALL ReleaseSwapchainImage(XrSwapchain sc,
   const Settings cfg = CurrentSettings().Get();
   if (cfg.enabled && cfg.lumaKey && layerHandle.load() != XR_NULL_HANDLE) {
     if (auto target = swapchains.ReleaseTarget(key(sc))) {
-      alphaPass.Apply(*target, cfg.keyLow, cfg.keyHigh);
+      alphaPass.Apply(*target, cfg.keyLow, cfg.keyHigh, cfg.showMask);
     }
   }
   return realReleaseSwapchainImage(sc, info);
