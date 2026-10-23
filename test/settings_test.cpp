@@ -61,6 +61,10 @@ static void live_settings_concurrent_reads() {
   writer.join();
 }
 
+static void quick_toggle_is_on_by_default() {
+  assert(Settings{}.quickToggle); // A+B in songs
+}
+
 static void show_mask_is_off_by_default() {
   assert(!Settings{}.showMask); // debug view: never on unless asked for
 }
@@ -97,6 +101,7 @@ int main() {
   black_light_texture_rules();
   bloom_fog_rules();
   show_mask_is_off_by_default();
+  quick_toggle_is_on_by_default();
   sanitize_clamps_ranges();
   sanitize_keeps_key_ordered();
   sanitize_keeps_valid_values();

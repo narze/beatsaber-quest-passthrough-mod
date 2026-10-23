@@ -28,6 +28,7 @@ struct Settings {
   // Keep the game's bloom fog with a hidden environment. The fog fades far
   // notes in, but also tints them with the environment light.
   bool distanceFog = false;
+  bool quickToggle = true; // A+B on the right controller toggles `enabled` in songs
   // Debug: draw the luma key as grayscale (white = game, black = room).
   // Not saved.
   bool showMask = false;
