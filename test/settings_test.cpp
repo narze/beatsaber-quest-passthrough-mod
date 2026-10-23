@@ -79,7 +79,22 @@ static void bloom_fog_rules() {
   assert(WantBloomFog(true, s));
 }
 
+static void black_light_texture_rules() {
+  Settings s; // passthrough on, both environments hidden
+  assert(BlackOutLightTexture(s, true));
+  assert(BlackOutLightTexture(s, false));
+  s.hideEnvironment = false;
+  assert(!BlackOutLightTexture(s, true)); // song environment shown: keep its light
+  assert(BlackOutLightTexture(s, false));
+  s.hideMenuEnvironment = false;
+  assert(!BlackOutLightTexture(s, false));
+  s.hideEnvironment = true;
+  s.enabled = false;
+  assert(!BlackOutLightTexture(s, true));
+}
+
 int main() {
+  black_light_texture_rules();
   bloom_fog_rules();
   show_mask_is_off_by_default();
   sanitize_clamps_ranges();

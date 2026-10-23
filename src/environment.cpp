@@ -14,6 +14,8 @@
 #include <vector>
 
 #include "GlobalNamespace/BloomFogSO.hpp"
+#include "GlobalNamespace/BloomPrePassRendererSO.hpp"
+#include "GlobalNamespace/ToneMapping.hpp"
 #include "GlobalNamespace/MainCameraCullingMask.hpp"
 #include "UnityEngine/Camera.hpp"
 #include "UnityEngine/GameObject.hpp"
@@ -22,6 +24,7 @@
 #include "UnityEngine/SceneManagement/LoadSceneMode.hpp"
 #include "UnityEngine/SceneManagement/Scene.hpp"
 #include "UnityEngine/SceneManagement/SceneManager.hpp"
+#include "UnityEngine/Texture2D.hpp"
 #include "UnityEngine/Transform.hpp"
 #include "beatsaber-hook/shared/utils/typedefs-wrappers.hpp"
 #include "bsml/shared/BSML/MainThreadScheduler.hpp"
@@ -177,9 +180,27 @@ MAKE_HOOK_MATCH(MainCameraCullingMask_Start, &GlobalNamespace::MainCameraCulling
   applyFog(passthrough::CurrentSettings().Get());
 }
 
+// The game draws every light (environment lights, the note spawn effect) into
+// the bloom pre-pass texture, and note, bomb and fog shaders sample it. That
+// texture does not use camera layers, so culling does not remove the lights:
+// far notes and bombs glow in the light colors. Give the shaders a black
+// texture instead. With fog on, far notes then fade in from black, which is
+// see-through.
+MAKE_HOOK_MATCH(BloomPrePassRendererSO_SetDataToShaders, &GlobalNamespace::BloomPrePassRendererSO::SetDataToShaders,
+                void, float_t stereoCameraEyeOffset, UnityEngine::Vector2 textureToScreenRatio,
+                UnityEngine::Texture *bloomFogTexture, GlobalNamespace::ToneMapping toneMapping) {
+  bool inGameplay = gameplayCamera && *gameplayCamera;
+  if (passthrough::BlackOutLightTexture(passthrough::CurrentSettings().Get(), inGameplay)) {
+    bloomFogTexture = UnityEngine::Texture2D::get_blackTexture().ptr();
+  }
+  BloomPrePassRendererSO_SetDataToShaders(stereoCameraEyeOffset, textureToScreenRatio, bloomFogTexture,
+                                          toneMapping);
+}
+
 namespace passthrough {
 
 void InstallEnvironmentHooks() {
+  INSTALL_HOOK(PaperLogger, BloomPrePassRendererSO_SetDataToShaders);
   INSTALL_HOOK(PaperLogger, SceneManager_Internal_SceneLoaded);
   INSTALL_HOOK(PaperLogger, MainCameraCullingMask_Start);
 }

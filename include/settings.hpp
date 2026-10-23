@@ -55,6 +55,13 @@ inline bool WantBloomFog(bool gameFog, const Settings &s) {
   return gameFog && (!s.enabled || !s.hideEnvironment || s.distanceFog);
 }
 
+// Whether shaders get a black light texture (the bloom pre-pass, where the
+// game draws all lights to tint notes, bombs and fog). inGameplay: a song is
+// running, else the menu.
+inline bool BlackOutLightTexture(const Settings &s, bool inGameplay) {
+  return s.enabled && (inGameplay ? s.hideEnvironment : s.hideMenuEnvironment);
+}
+
 // Thread-safe holder. Get() is cheap enough to call once per frame.
 class LiveSettings {
 public:
