@@ -97,7 +97,39 @@ static void black_light_texture_rules() {
   assert(!BlackOutLightTexture(s, true));
 }
 
+static void pause_panel_pose_defaults() {
+  PanelPose p = Settings{}.pausePanel; // left of the pause menu, turned to the player
+  assert(p.x < 0.0f && p.y > 1.0f && p.z > 1.0f);
+  float len = p.qx * p.qx + p.qy * p.qy + p.qz * p.qz + p.qw * p.qw;
+  assert(len > 0.99f && len < 1.01f);
+}
+
+static void sanitize_keeps_pause_panel_reachable() {
+  Settings s;
+  s.pausePanel.x = 50.0f;
+  s.pausePanel.y = -3.0f;
+  s.pausePanel.z = -50.0f;
+  s = Sanitize(s);
+  assert(s.pausePanel.x == 3.0f && s.pausePanel.y == 0.0f && s.pausePanel.z == -3.0f);
+}
+
+static void sanitize_normalizes_pause_panel_rotation() {
+  Settings s;
+  s.pausePanel.qx = 0.0f;
+  s.pausePanel.qy = 0.0f;
+  s.pausePanel.qz = 0.0f;
+  s.pausePanel.qw = 2.0f;
+  s = Sanitize(s);
+  assert(s.pausePanel.qw == 1.0f);
+  s.pausePanel.qw = 0.0f; // not a rotation: back to the default
+  s = Sanitize(s);
+  assert(s.pausePanel.qy == PanelPose{}.qy && s.pausePanel.qw == PanelPose{}.qw);
+}
+
 int main() {
+  pause_panel_pose_defaults();
+  sanitize_keeps_pause_panel_reachable();
+  sanitize_normalizes_pause_panel_rotation();
   black_light_texture_rules();
   bloom_fog_rules();
   show_mask_is_off_by_default();
