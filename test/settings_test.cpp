@@ -62,7 +62,7 @@ static void live_settings_concurrent_reads() {
 }
 
 static void quick_toggle_is_on_by_default() {
-  assert(Settings{}.quickToggle); // A+B in songs
+  assert(Settings{}.quickToggle); // A+B toggles passthrough
 }
 
 static void show_mask_is_off_by_default() {

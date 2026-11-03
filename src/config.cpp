@@ -14,7 +14,7 @@
 //   lumaKey:     replace the game's alpha with a brightness key (keyLow..keyHigh)
 //   hideEnvironment / hideMenuEnvironment: hide the environment renderers
 //   distanceFog: keep the bloom fog when the environment is hidden
-//   quickToggle: A+B on the right controller toggles passthrough in songs
+//   quickToggle: A+B on the right controller toggles passthrough
 //   pausePanel:  position (x, y, z) and rotation (qx, qy, qz, qw) of the
 //                pause menu panel; the user moves it with its handle
 

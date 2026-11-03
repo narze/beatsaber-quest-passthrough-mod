@@ -38,7 +38,7 @@ struct Settings {
   // notes in, but also tints them with the environment light.
   bool distanceFog = false;
   PanelPose pausePanel;   // the user can move the panel; saved
-  bool quickToggle = true; // A+B on the right controller toggles `enabled` in songs
+  bool quickToggle = true; // A+B on the right controller toggles `enabled`, in the menu and in songs
   // Debug: draw the luma key as grayscale (white = game, black = room).
   // Not saved.
   bool showMask = false;

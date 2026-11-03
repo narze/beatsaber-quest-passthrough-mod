@@ -12,8 +12,8 @@
 #include <optional>
 #include <list>
 
-#include "GlobalNamespace/AudioTimeSyncController.hpp"
 #include "GlobalNamespace/OVRInput.hpp"
+#include "GlobalNamespace/OculusVRHelper.hpp"
 #include "GlobalNamespace/PauseMenuManager.hpp"
 #include "UnityEngine/GameObject.hpp"
 #include "UnityEngine/RectTransform.hpp"
@@ -83,7 +83,7 @@ void buildPanel(UnityEngine::Transform *parent) {
   auto fog = BSML::Lite::CreateToggle(parent, "Distance fog", s.distanceFog, [](bool v) {
     change([v](Settings &x) { x.distanceFog = v; });
   });
-  auto quickToggle = BSML::Lite::CreateToggle(parent, "A+B toggles passthrough in songs", s.quickToggle,
+  auto quickToggle = BSML::Lite::CreateToggle(parent, "A+B toggles passthrough", s.quickToggle,
                                               [](bool v) { change([v](Settings &x) { x.quickToggle = v; }); });
   // How dark a pixel must be to show the room. Higher = more see-through.
   auto key = BSML::Lite::CreateSliderSetting(parent, "See-through below brightness", 0.005f, s.keyHigh, 0.005f,
@@ -186,10 +186,11 @@ passthrough::ButtonCombo quickToggleCombo; // main thread only
 
 } // namespace
 
-// The song clock updates every frame, only in songs: check the A+B combo.
-MAKE_HOOK_MATCH(AudioTimeSyncController_Update, &GlobalNamespace::AudioTimeSyncController::Update, void,
-                GlobalNamespace::AudioTimeSyncController *self) {
-  AudioTimeSyncController_Update(self);
+// The VR helper updates every frame, in the menu and in songs: check the A+B
+// combo.
+MAKE_HOOK_MATCH(OculusVRHelper_Update, &GlobalNamespace::OculusVRHelper::Update, void,
+                GlobalNamespace::OculusVRHelper *self) {
+  OculusVRHelper_Update(self);
   using GlobalNamespace::OVRInput;
   auto right = OVRInput::Controller::RTouch;
   bool fire = quickToggleCombo.Update(OVRInput::Get(OVRInput::RawButton::A, right),
@@ -233,7 +234,7 @@ void RegisterSettingsUi() {
                                                        "See your room instead of the environment",
                                                        viewControllerDidActivate);
   BSML::Register::RegisterGameplaySetupTab("Passthrough", gameplaySetupDidActivate);
-  INSTALL_HOOK(PaperLogger, AudioTimeSyncController_Update);
+  INSTALL_HOOK(PaperLogger, OculusVRHelper_Update);
   INSTALL_HOOK(PaperLogger, PauseMenuManager_ShowMenu);
   INSTALL_HOOK(PaperLogger, PauseMenuManager_StartResumeAnimation);
   INSTALL_HOOK(PaperLogger, PauseMenuManager_MenuButtonPressed);
