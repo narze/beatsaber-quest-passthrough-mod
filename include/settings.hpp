@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <mutex>
 
+#include "keybind.hpp"
 #include "xr_logic.hpp"
 
 namespace passthrough {
@@ -38,7 +39,9 @@ struct Settings {
   // notes in, but also tints them with the environment light.
   bool distanceFog = false;
   PanelPose pausePanel;   // the user can move the panel; saved
-  bool quickToggle = true; // A+B on the right controller toggles `enabled` in songs
+  // Controller combo (Keybind::Button bits) that toggles `enabled`, in the
+  // menu and in songs. 0 = off.
+  uint32_t quickToggle = Keybind::kDefaultButtons;
   // Debug: draw the luma key as grayscale (white = game, black = room).
   // Not saved.
   bool showMask = false;
@@ -58,6 +61,7 @@ inline Settings Sanitize(Settings s) {
       s.keyHigh = 1.0f;
     }
   }
+  if (!Keybind::IsPreset(s.quickToggle)) s.quickToggle = Keybind::kDefaultButtons;
   // Keep the pause panel within reach, so it cannot get lost.
   PanelPose &p = s.pausePanel;
   p.x = std::clamp(p.x, -3.0f, 3.0f);

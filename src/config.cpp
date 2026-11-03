@@ -4,6 +4,7 @@
 #include <string>
 
 #include "beatsaber-hook/shared/config/config-utils.hpp"
+#include "keybind.hpp"
 #include "main.hpp"
 
 // Configs/Passthrough.json keys:
@@ -14,7 +15,9 @@
 //   lumaKey:     replace the game's alpha with a brightness key (keyLow..keyHigh)
 //   hideEnvironment / hideMenuEnvironment: hide the environment renderers
 //   distanceFog: keep the bloom fog when the environment is hidden
-//   quickToggle: A+B on the right controller toggles passthrough in songs
+//   quickToggle: name of the controller combo that toggles passthrough
+//                (keybind.hpp, for example "A + B" or "Off"); older
+//                configs have true (A + B) or false (Off)
 //   pausePanel:  position (x, y, z) and rotation (qx, qy, qz, qw) of the
 //                pause menu panel; the user moves it with its handle
 
@@ -38,7 +41,8 @@ void writeSettings(ConfigDocument &doc, const Settings &s) {
   doc.AddMember("hideEnvironment", s.hideEnvironment, alloc);
   doc.AddMember("hideMenuEnvironment", s.hideMenuEnvironment, alloc);
   doc.AddMember("distanceFog", s.distanceFog, alloc);
-  doc.AddMember("quickToggle", s.quickToggle, alloc);
+  std::string combo(Keybind::NameOf(s.quickToggle));
+  doc.AddMember("quickToggle", rapidjson::Value(combo.c_str(), alloc).Move(), alloc);
   rapidjson::Value pose(rapidjson::kObjectType);
   const PanelPose &p = s.pausePanel;
   pose.AddMember("x", p.x, alloc);
@@ -78,7 +82,11 @@ void LoadConfig(const modloader::ModInfo &info) {
     boolean("hideEnvironment", s.hideEnvironment);
     boolean("hideMenuEnvironment", s.hideMenuEnvironment);
     boolean("distanceFog", s.distanceFog);
-    boolean("quickToggle", s.quickToggle);
+    if (doc.HasMember("quickToggle")) {
+      auto &v = doc["quickToggle"];
+      if (v.IsString()) s.quickToggle = Keybind::Find(v.GetString()).buttons;
+      else if (v.IsBool()) s.quickToggle = v.GetBool() ? Keybind::kDefaultButtons : 0;
+    }
     if (doc.HasMember("pausePanel") && doc["pausePanel"].IsObject()) {
       auto &pose = doc["pausePanel"];
       auto get = [&](const char *name, float &value) {
@@ -99,10 +107,10 @@ void LoadConfig(const modloader::ModInfo &info) {
 
   const Settings c = CurrentSettings().Get();
   PaperLogger.info("settings: enabled={} placement={} opacity={} sourceAlpha={} lumaKey={} "
-                   "key={}..{} hideEnvironment={} hideMenuEnvironment={}",
+                   "key={}..{} hideEnvironment={} hideMenuEnvironment={} quickToggle={}",
                    c.enabled, c.placement == LayerPlacement::Overlay ? "overlay" : "underlay",
                    c.opacity, c.sourceAlpha, c.lumaKey, c.keyLow, c.keyHigh, c.hideEnvironment,
-                   c.hideMenuEnvironment);
+                   c.hideMenuEnvironment, Keybind::NameOf(c.quickToggle));
 }
 
 void SaveConfig() {

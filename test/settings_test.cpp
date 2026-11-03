@@ -61,8 +61,16 @@ static void live_settings_concurrent_reads() {
   writer.join();
 }
 
-static void quick_toggle_is_on_by_default() {
-  assert(Settings{}.quickToggle); // A+B in songs
+static void quick_toggle_is_a_plus_b_by_default() {
+  assert(Settings{}.quickToggle == Keybind::kDefaultButtons); // A+B toggles passthrough
+}
+
+static void sanitize_resets_unknown_quick_toggle() {
+  Settings s;
+  s.quickToggle = Keybind::kA | Keybind::kX | Keybind::kLeftStick; // not a preset
+  assert(Sanitize(s).quickToggle == Keybind::kDefaultButtons);
+  s.quickToggle = 0; // Off is a preset
+  assert(Sanitize(s).quickToggle == 0);
 }
 
 static void show_mask_is_off_by_default() {
@@ -133,7 +141,8 @@ int main() {
   black_light_texture_rules();
   bloom_fog_rules();
   show_mask_is_off_by_default();
-  quick_toggle_is_on_by_default();
+  quick_toggle_is_a_plus_b_by_default();
+  sanitize_resets_unknown_quick_toggle();
   sanitize_clamps_ranges();
   sanitize_keeps_key_ordered();
   sanitize_keeps_valid_values();

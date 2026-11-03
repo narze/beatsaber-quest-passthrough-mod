@@ -1,15 +1,20 @@
 #pragma once
 
-// Detects a two-button combo press. Update() returns true once when both
-// buttons become down; the buttons must be released before it fires again.
+// Detects a combo press. Update() returns true once when every button of the
+// combo becomes down; the combo must be released before it fires again.
 // No game dependencies, so it is unit tested on the host.
+
+#include <cstdint>
+
+#include "keybind.hpp"
 
 namespace passthrough {
 
 class ButtonCombo {
 public:
-  bool Update(bool first, bool second) {
-    bool down = first && second;
+  // combo, pressed: Keybind::Button bits.
+  bool Update(uint32_t combo, uint32_t pressed) {
+    bool down = Keybind::IsHeld(combo, pressed);
     bool fire = down && !wasDown_;
     wasDown_ = down;
     return fire;
