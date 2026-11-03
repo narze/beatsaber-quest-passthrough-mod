@@ -66,4 +66,39 @@ WithSourceAlpha(const XrCompositionLayerBaseHeader *const *layers, uint32_t coun
   return out;
 }
 
+// How the room (the passthrough image) looks. Units of XR_FB_passthrough:
+// brightness -100..100 (0 = no change), contrast and saturation 0.. (1 = no
+// change, saturation 0 = grayscale).
+struct RoomLook {
+  float opacity = 1.0f;
+  float brightness = 0.0f;
+  float contrast = 1.0f;
+  float saturation = 1.0f;
+
+  bool HasColorChange() const { return brightness != 0.0f || contrast != 1.0f || saturation != 1.0f; }
+  bool operator==(const RoomLook &) const = default;
+};
+
+// A passthrough layer style. style.next can point to color, so do not copy
+// it after MakePassthroughStyle.
+struct PassthroughStyle {
+  XrPassthroughStyleFB style{};
+  XrPassthroughBrightnessContrastSaturationFB color{};
+};
+
+// Fills `out` for xrPassthroughLayerSetStyleFB. The color struct is chained
+// only when withColor is set and the look changes the colors.
+inline void MakePassthroughStyle(const RoomLook &look, bool withColor, PassthroughStyle &out) {
+  out.style = {};
+  out.style.type = XR_TYPE_PASSTHROUGH_STYLE_FB;
+  out.style.textureOpacityFactor = look.opacity;
+  out.style.edgeColor = {0, 0, 0, 0};
+  out.color = {};
+  out.color.type = XR_TYPE_PASSTHROUGH_BRIGHTNESS_CONTRAST_SATURATION_FB;
+  out.color.brightness = look.brightness;
+  out.color.contrast = look.contrast;
+  out.color.saturation = look.saturation;
+  if (withColor && look.HasColorChange()) out.style.next = &out.color;
+}
+
 } // namespace passthrough
