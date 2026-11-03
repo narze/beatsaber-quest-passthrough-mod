@@ -9,8 +9,11 @@
 
 #include "settings_ui.hpp"
 
-#include <optional>
 #include <list>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include "GlobalNamespace/OVRInput.hpp"
 #include "GlobalNamespace/OculusVRHelper.hpp"
@@ -22,12 +25,14 @@
 #include "beatsaber-hook/shared/utils/typedefs-wrappers.hpp"
 #include "bsml/shared/BSML-Lite.hpp"
 #include "bsml/shared/BSML.hpp"
+#include "bsml/shared/BSML/Components/Settings/DropdownListSetting.hpp"
 #include "bsml/shared/BSML/Components/Settings/SliderSetting.hpp"
 #include "bsml/shared/BSML/Components/Settings/ToggleSetting.hpp"
 #include "bsml/shared/BSML/FloatingScreen/FloatingScreen.hpp"
 #include "button_combo.hpp"
 #include "config.hpp"
 #include "environment.hpp"
+#include "keybind.hpp"
 #include "main.hpp"
 #include "settings.hpp"
 
@@ -48,7 +53,8 @@ template <typename F> void change(F &&edit) {
 }
 
 struct Panel {
-  SafePtrUnity<BSML::ToggleSetting> enabled, hideSong, hideMenu, fog, quickToggle, showMask;
+  SafePtrUnity<BSML::ToggleSetting> enabled, hideSong, hideMenu, fog, showMask;
+  SafePtrUnity<BSML::DropdownListSetting> quickToggle;
   SafePtrUnity<BSML::SliderSetting> key, opacity;
 
   void Refresh() const {
@@ -59,7 +65,16 @@ struct Panel {
     if (hideSong) hideSong->set_Value(s.hideEnvironment);
     if (hideMenu) hideMenu->set_Value(s.hideMenuEnvironment);
     if (fog) fog->set_Value(s.distanceFog);
-    if (quickToggle) quickToggle->set_Value(s.quickToggle);
+    if (quickToggle) {
+      // Select the dropdown's own value object with this name.
+      std::string_view name = passthrough::Keybind::NameOf(s.quickToggle);
+      for (auto value : quickToggle->values) {
+        if (StringW(reinterpret_cast<Il2CppString *>(value)) == name) {
+          quickToggle->set_Value(value);
+          break;
+        }
+      }
+    }
     if (key) key->set_Value(s.keyHigh);
     if (opacity) opacity->set_Value(s.opacity);
     if (showMask) showMask->set_Value(s.showMask);
@@ -83,8 +98,18 @@ void buildPanel(UnityEngine::Transform *parent) {
   auto fog = BSML::Lite::CreateToggle(parent, "Distance fog", s.distanceFog, [](bool v) {
     change([v](Settings &x) { x.distanceFog = v; });
   });
-  auto quickToggle = BSML::Lite::CreateToggle(parent, "A+B toggles passthrough", s.quickToggle,
-                                              [](bool v) { change([v](Settings &x) { x.quickToggle = v; }); });
+  // The combo that turns passthrough on or off, in the menu and in songs.
+  static std::vector<std::string_view> comboNames = [] {
+    std::vector<std::string_view> names;
+    for (const auto &p : passthrough::Keybind::Presets()) names.push_back(p.name);
+    return names;
+  }();
+  auto quickToggle = BSML::Lite::CreateDropdown(
+      parent, "Toggle passthrough with", std::string(passthrough::Keybind::NameOf(s.quickToggle)), comboNames,
+      [](StringW v) {
+        uint32_t buttons = passthrough::Keybind::Find(static_cast<std::string>(v)).buttons;
+        change([buttons](Settings &x) { x.quickToggle = buttons; });
+      });
   // How dark a pixel must be to show the room. Higher = more see-through.
   auto key = BSML::Lite::CreateSliderSetting(parent, "See-through below brightness", 0.005f, s.keyHigh, 0.005f,
                                              0.2f, [](float v) {
@@ -102,7 +127,7 @@ void buildPanel(UnityEngine::Transform *parent) {
 
   // Drop panels whose scene is gone, then remember this one.
   std::erase_if(panels, [](const Panel &p) { return !p.enabled; });
-  panels.push_back(Panel{enabled, hideSong, hideMenu, fog, quickToggle, showMask, key, opacity});
+  panels.push_back(Panel{enabled, hideSong, hideMenu, fog, showMask, quickToggle, key, opacity});
 }
 
 void refreshAll() {
@@ -184,21 +209,34 @@ void showPausePanel(bool show) {
 
 passthrough::ButtonCombo quickToggleCombo; // main thread only
 
+// Pressed controller buttons as Keybind::Button bits.
+uint32_t pressedButtons() {
+  using GlobalNamespace::OVRInput;
+  using namespace passthrough::Keybind;
+  auto touch = OVRInput::Controller::Touch;
+  uint32_t pressed = 0;
+  if (OVRInput::Get(OVRInput::RawButton::X, touch)) pressed |= kX;
+  if (OVRInput::Get(OVRInput::RawButton::Y, touch)) pressed |= kY;
+  if (OVRInput::Get(OVRInput::RawButton::A, touch)) pressed |= kA;
+  if (OVRInput::Get(OVRInput::RawButton::B, touch)) pressed |= kB;
+  if (OVRInput::Get(OVRInput::RawButton::LThumbstick, touch)) pressed |= kLeftStick;
+  if (OVRInput::Get(OVRInput::RawButton::RThumbstick, touch)) pressed |= kRightStick;
+  return pressed;
+}
+
 } // namespace
 
-// The VR helper updates every frame, in the menu and in songs: check the A+B
-// combo.
+// The VR helper updates every frame, in the menu and in songs: check the
+// quick toggle combo.
 MAKE_HOOK_MATCH(OculusVRHelper_Update, &GlobalNamespace::OculusVRHelper::Update, void,
                 GlobalNamespace::OculusVRHelper *self) {
   OculusVRHelper_Update(self);
-  using GlobalNamespace::OVRInput;
-  auto right = OVRInput::Controller::RTouch;
-  bool fire = quickToggleCombo.Update(OVRInput::Get(OVRInput::RawButton::A, right),
-                                      OVRInput::Get(OVRInput::RawButton::B, right));
-  if (!fire || !CurrentSettings().Get().quickToggle) return;
+  uint32_t combo = CurrentSettings().Get().quickToggle;
+  if (!quickToggleCombo.Update(combo, pressedButtons())) return;
   change([](Settings &x) { x.enabled = !x.enabled; });
   refreshAll();
-  PaperLogger.info("A+B: passthrough {}", CurrentSettings().Get().enabled ? "on" : "off");
+  PaperLogger.info("{}: passthrough {}", passthrough::Keybind::NameOf(combo),
+                   CurrentSettings().Get().enabled ? "on" : "off");
 }
 
 MAKE_HOOK_MATCH(PauseMenuManager_ShowMenu, &GlobalNamespace::PauseMenuManager::ShowMenu, void,
