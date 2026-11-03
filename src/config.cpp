@@ -11,6 +11,8 @@
 //   enabled:     master switch
 //   placement:   "underlay" (background) or "overlay" (on top, for testing)
 //   opacity:     0..1, passthrough opacity
+//   roomBrightness: -100..100, roomContrast / roomSaturation: 0..2; the
+//                color of the room (0, 1, 1 = as the headset shows it)
 //   sourceAlpha: blend the game over passthrough with the game's alpha
 //   lumaKey:     replace the game's alpha with a brightness key (keyLow..keyHigh)
 //   hideEnvironment / hideMenuEnvironment: hide the environment renderers
@@ -34,6 +36,9 @@ void writeSettings(ConfigDocument &doc, const Settings &s) {
   const char *placement = s.placement == LayerPlacement::Overlay ? "overlay" : "underlay";
   doc.AddMember("placement", rapidjson::Value(placement, alloc).Move(), alloc);
   doc.AddMember("opacity", s.opacity, alloc);
+  doc.AddMember("roomBrightness", s.roomBrightness, alloc);
+  doc.AddMember("roomContrast", s.roomContrast, alloc);
+  doc.AddMember("roomSaturation", s.roomSaturation, alloc);
   doc.AddMember("sourceAlpha", s.sourceAlpha, alloc);
   doc.AddMember("lumaKey", s.lumaKey, alloc);
   doc.AddMember("keyLow", s.keyLow, alloc);
@@ -75,6 +80,9 @@ void LoadConfig(const modloader::ModInfo &info) {
                                                                            : LayerPlacement::Underlay;
     }
     number("opacity", s.opacity);
+    number("roomBrightness", s.roomBrightness);
+    number("roomContrast", s.roomContrast);
+    number("roomSaturation", s.roomSaturation);
     boolean("sourceAlpha", s.sourceAlpha);
     boolean("lumaKey", s.lumaKey);
     number("keyLow", s.keyLow);
@@ -106,10 +114,10 @@ void LoadConfig(const modloader::ModInfo &info) {
   SaveConfig(); // normalise: every key present, values sanitized
 
   const Settings c = CurrentSettings().Get();
-  PaperLogger.info("settings: enabled={} placement={} opacity={} sourceAlpha={} lumaKey={} "
+  PaperLogger.info("settings: enabled={} placement={} opacity={} room={}/{}/{} sourceAlpha={} lumaKey={} "
                    "key={}..{} hideEnvironment={} hideMenuEnvironment={} quickToggle={}",
                    c.enabled, c.placement == LayerPlacement::Overlay ? "overlay" : "underlay",
-                   c.opacity, c.sourceAlpha, c.lumaKey, c.keyLow, c.keyHigh, c.hideEnvironment,
+                   c.opacity, c.roomBrightness, c.roomContrast, c.roomSaturation, c.sourceAlpha, c.lumaKey, c.keyLow, c.keyHigh, c.hideEnvironment,
                    c.hideMenuEnvironment, Keybind::NameOf(c.quickToggle));
 }
 

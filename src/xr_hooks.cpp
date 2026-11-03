@@ -5,7 +5,8 @@
 // back our wrappers and keep the real pointers. The wrappers:
 //   xrCreateInstance  - add XR_FB_passthrough to the enabled extensions
 //   xrCreateSession   - create the passthrough feature + layer
-//   xrEndFrame        - add the passthrough composition layer to every frame
+//   xrEndFrame        - add the passthrough composition layer to every frame,
+//                       and apply the room look (opacity, colors) on change
 //   xrDestroySession / xrDestroyInstance - clean up
 //   xrCreateSwapchain / xrEnumerateSwapchainImages / xrAcquireSwapchainImage
 //                     - track the GL texture of each eye-buffer image
@@ -21,6 +22,7 @@
 #include <atomic>
 #include <cstring>
 #include <mutex>
+#include <optional>
 
 #define XR_USE_GRAPHICS_API_OPENGL_ES
 #include "openxr/openxr_platform.h"
@@ -34,8 +36,6 @@
 namespace {
 
 using namespace passthrough;
-
-std::atomic<float> appliedOpacity{-1.0f}; // last opacity sent to the runtime
 
 PFN_xrGetInstanceProcAddr realGetInstanceProcAddr = nullptr;
 PFN_xrCreateInstance realCreateInstance = nullptr;
@@ -86,6 +86,34 @@ template <typename F> bool loadInstanceFunction(XrInstance inst, const char *nam
   return true;
 }
 
+// The look last sent to the runtime. Set from the session thread (layer
+// create) and the render thread (xrEndFrame).
+std::mutex styleMutex;
+std::optional<RoomLook> appliedLook;
+bool colorSupported = true; // false after the runtime rejects the color struct
+
+// Sends `look` to the layer, if it is not already applied. When the runtime
+// rejects brightness / contrast / saturation, applies the opacity only and
+// does not try the colors again.
+void applyStyle(XrPassthroughLayerFB layer, const RoomLook &look) {
+  std::lock_guard lock(styleMutex);
+  if (appliedLook == look) return;
+  PassthroughStyle style;
+  MakePassthroughStyle(look, colorSupported, style);
+  XrResult r = setPassthroughStyle(layer, &style.style);
+  if (XR_FAILED(r) && style.style.next) {
+    logResult("xrPassthroughLayerSetStyleFB (with color)", r);
+    colorSupported = false;
+    MakePassthroughStyle(look, false, style);
+    r = setPassthroughStyle(layer, &style.style);
+  }
+  logResult("xrPassthroughLayerSetStyleFB", r);
+  PaperLogger.info("room look: opacity {} brightness {} contrast {} saturation {}{}", look.opacity,
+                   look.brightness, look.contrast, look.saturation, colorSupported ? "" : " (colors not supported)");
+  // Also store on failure, so a bad value is not sent again on every frame.
+  appliedLook = look;
+}
+
 void destroyPassthroughLocked() {
   if (auto layer = layerHandle.exchange(XR_NULL_HANDLE); layer != XR_NULL_HANDLE) {
     logResult("xrDestroyPassthroughLayerFB", destroyPassthroughLayer(layer));
@@ -119,12 +147,12 @@ void createPassthroughLocked(XrSession s) {
     return;
   }
 
-  XrPassthroughStyleFB style{XR_TYPE_PASSTHROUGH_STYLE_FB};
-  style.textureOpacityFactor = CurrentSettings().Get().opacity;
-  style.edgeColor = {0, 0, 0, 0};
-  logResult("xrPassthroughLayerSetStyleFB", setPassthroughStyle(layer, &style));
-
-  appliedOpacity.store(style.textureOpacityFactor);
+  {
+    std::lock_guard lock(styleMutex);
+    appliedLook.reset(); // a new layer has the default style
+    colorSupported = true;
+  }
+  applyStyle(layer, RoomLookOf(CurrentSettings().Get()));
   layerHandle.store(layer);
 }
 
@@ -227,14 +255,7 @@ XRAPI_ATTR XrResult XRAPI_CALL EndFrame(XrSession s, const XrFrameEndInfo *info)
   recordFrameTiming(info->displayTime, cfg.enabled);
   if (!cfg.enabled || layer == XR_NULL_HANDLE || s != session.load()) return realEndFrame(s, info);
 
-  if (cfg.opacity != appliedOpacity.load()) {
-    XrPassthroughStyleFB style{XR_TYPE_PASSTHROUGH_STYLE_FB};
-    style.textureOpacityFactor = cfg.opacity;
-    style.edgeColor = {0, 0, 0, 0};
-    XrResult sr = setPassthroughStyle(layer, &style);
-    if (XR_SUCCEEDED(sr)) appliedOpacity.store(cfg.opacity);
-    logResult("xrPassthroughLayerSetStyleFB (opacity change)", sr);
-  }
+  applyStyle(layer, RoomLookOf(cfg)); // no-op unless the look changed
 
   XrCompositionLayerPassthroughFB ptLayer{XR_TYPE_COMPOSITION_LAYER_PASSTHROUGH_FB};
   ptLayer.flags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;

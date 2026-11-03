@@ -134,7 +134,39 @@ static void sanitize_normalizes_pause_panel_rotation() {
   assert(s.pausePanel.qy == PanelPose{}.qy && s.pausePanel.qw == PanelPose{}.qw);
 }
 
+static void room_look_is_neutral_by_default() {
+  Settings s; // the room looks as the headset shows it, until the user changes it
+  assert(s.roomBrightness == 0.0f && s.roomContrast == 1.0f && s.roomSaturation == 1.0f);
+  assert(!RoomLookOf(s).HasColorChange());
+}
+
+static void sanitize_clamps_room_look() {
+  Settings s;
+  s.roomBrightness = -500.0f;
+  s.roomContrast = -1.0f;
+  s.roomSaturation = 9.0f;
+  s = Sanitize(s);
+  assert(s.roomBrightness == -100.0f); // XR_FB_passthrough range
+  assert(s.roomContrast == 0.0f);
+  assert(s.roomSaturation == 2.0f);
+  s.roomBrightness = 500.0f;
+  assert(Sanitize(s).roomBrightness == 100.0f);
+}
+
+static void room_look_of_settings() {
+  Settings s;
+  s.opacity = 0.4f;
+  s.roomBrightness = -30.0f;
+  s.roomContrast = 1.2f;
+  s.roomSaturation = 0.5f;
+  RoomLook look = RoomLookOf(s);
+  assert(look.opacity == 0.4f && look.brightness == -30.0f && look.contrast == 1.2f && look.saturation == 0.5f);
+}
+
 int main() {
+  room_look_is_neutral_by_default();
+  sanitize_clamps_room_look();
+  room_look_of_settings();
   pause_panel_pose_defaults();
   sanitize_keeps_pause_panel_reachable();
   sanitize_normalizes_pause_panel_rotation();

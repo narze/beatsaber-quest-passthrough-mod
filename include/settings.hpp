@@ -27,6 +27,11 @@ struct Settings {
   bool enabled = true; // master switch: off = the game exactly as without the mod
   LayerPlacement placement = LayerPlacement::Underlay;
   float opacity = 1.0f;    // passthrough texture opacity
+  // Room color: brightness -100..100, contrast and saturation 0..2.
+  // 0, 1, 1 = the room as the headset shows it.
+  float roomBrightness = 0.0f;
+  float roomContrast = 1.0f;
+  float roomSaturation = 1.0f;
   bool sourceAlpha = true; // blend the game over passthrough with its alpha
   // Replace the game's alpha (glow strength in Beat Saber) with a key of the
   // pixel brightness: alpha = smoothstep(keyLow, keyHigh, max(r, g, b)).
@@ -50,6 +55,9 @@ struct Settings {
 // Clamps values to valid ranges and keeps keyLow < keyHigh.
 inline Settings Sanitize(Settings s) {
   s.opacity = std::clamp(s.opacity, 0.0f, 1.0f);
+  s.roomBrightness = std::clamp(s.roomBrightness, -100.0f, 100.0f);
+  s.roomContrast = std::clamp(s.roomContrast, 0.0f, 2.0f);
+  s.roomSaturation = std::clamp(s.roomSaturation, 0.0f, 2.0f);
   s.keyLow = std::clamp(s.keyLow, 0.0f, 1.0f);
   s.keyHigh = std::clamp(s.keyHigh, 0.0f, 1.0f);
   constexpr float minGap = 0.001f;
@@ -75,6 +83,11 @@ inline Settings Sanitize(Settings s) {
     p.qx /= len, p.qy /= len, p.qz /= len, p.qw /= len;
   }
   return s;
+}
+
+// The passthrough layer look for these settings.
+inline RoomLook RoomLookOf(const Settings &s) {
+  return {s.opacity, s.roomBrightness, s.roomContrast, s.roomSaturation};
 }
 
 // Whether the game's bloom fog should be on. gameFog: the game's own value.

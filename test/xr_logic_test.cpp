@@ -103,7 +103,46 @@ static void source_alpha_storage_survives_many_layers() {
   assert(out[1] == reinterpret_cast<const XrCompositionLayerBaseHeader *>(&storage[1]));
 }
 
+static void style_without_color_change_has_no_chain() {
+  PassthroughStyle out;
+  MakePassthroughStyle({0.6f, 0.0f, 1.0f, 1.0f}, true, out);
+  assert(out.style.type == XR_TYPE_PASSTHROUGH_STYLE_FB);
+  assert(out.style.textureOpacityFactor == 0.6f);
+  assert(out.style.edgeColor.a == 0.0f); // no edge rendering
+  assert(out.style.next == nullptr);      // neutral colors: same as before the feature
+}
+
+static void style_chains_brightness_contrast_saturation() {
+  PassthroughStyle out;
+  MakePassthroughStyle({1.0f, -20.0f, 1.5f, 0.0f}, true, out);
+  assert(out.style.next == &out.color);
+  assert(out.color.type == XR_TYPE_PASSTHROUGH_BRIGHTNESS_CONTRAST_SATURATION_FB);
+  assert(out.color.next == nullptr);
+  assert(out.color.brightness == -20.0f);
+  assert(out.color.contrast == 1.5f);
+  assert(out.color.saturation == 0.0f);
+}
+
+static void style_can_skip_color() {
+  PassthroughStyle out; // fallback when the runtime rejects the color struct
+  MakePassthroughStyle({0.5f, 10.0f, 2.0f, 2.0f}, false, out);
+  assert(out.style.next == nullptr);
+  assert(out.style.textureOpacityFactor == 0.5f);
+}
+
+static void room_look_neutral_check() {
+  assert(RoomLook{}.HasColorChange() == false);
+  assert((RoomLook{0.3f, 0.0f, 1.0f, 1.0f}.HasColorChange() == false)); // opacity is not a color
+  assert((RoomLook{1.0f, 5.0f, 1.0f, 1.0f}.HasColorChange()));
+  assert((RoomLook{1.0f, 0.0f, 0.9f, 1.0f}.HasColorChange()));
+  assert((RoomLook{1.0f, 0.0f, 1.0f, 0.0f}.HasColorChange()));
+}
+
 int main() {
+  style_without_color_change_has_no_chain();
+  style_chains_brightness_contrast_saturation();
+  style_can_skip_color();
+  room_look_neutral_check();
   source_alpha_only_on_projection_layers();
   source_alpha_storage_survives_many_layers();
   adds_missing_extension();
