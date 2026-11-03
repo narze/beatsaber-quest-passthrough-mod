@@ -55,7 +55,7 @@ template <typename F> void change(F &&edit) {
 struct Panel {
   SafePtrUnity<BSML::ToggleSetting> enabled, hideSong, hideMenu, fog, showMask;
   SafePtrUnity<BSML::DropdownListSetting> quickToggle;
-  SafePtrUnity<BSML::SliderSetting> key, opacity;
+  SafePtrUnity<BSML::SliderSetting> key, opacity, brightness, contrast, saturation;
 
   void Refresh() const {
     if (!enabled) return; // destroyed with its scene
@@ -77,6 +77,9 @@ struct Panel {
     }
     if (key) key->set_Value(s.keyHigh);
     if (opacity) opacity->set_Value(s.opacity);
+    if (brightness) brightness->set_Value(s.roomBrightness);
+    if (contrast) contrast->set_Value(s.roomContrast);
+    if (saturation) saturation->set_Value(s.roomSaturation);
     if (showMask) showMask->set_Value(s.showMask);
     refreshing = false;
   }
@@ -118,8 +121,19 @@ void buildPanel(UnityEngine::Transform *parent) {
                                                  x.keyHigh = v;
                                                });
                                              });
-  auto opacity = BSML::Lite::CreateSliderSetting(parent, "Room brightness (opacity)", 0.05f, s.opacity, 0.0f, 1.0f,
+  auto opacity = BSML::Lite::CreateSliderSetting(parent, "Room opacity", 0.05f, s.opacity, 0.0f, 1.0f,
                                                  [](float v) { change([v](Settings &x) { x.opacity = v; }); });
+  // The room color (XR_FB_passthrough units). 0, 1, 1 = no change.
+  auto brightness = BSML::Lite::CreateSliderSetting(parent, "Room brightness", 5.0f, s.roomBrightness, -100.0f,
+                                                    100.0f, [](float v) {
+                                                      change([v](Settings &x) { x.roomBrightness = v; });
+                                                    });
+  auto contrast = BSML::Lite::CreateSliderSetting(parent, "Room contrast", 0.05f, s.roomContrast, 0.0f, 2.0f,
+                                                  [](float v) { change([v](Settings &x) { x.roomContrast = v; }); });
+  auto saturation = BSML::Lite::CreateSliderSetting(parent, "Room saturation", 0.05f, s.roomSaturation, 0.0f, 2.0f,
+                                                    [](float v) {
+                                                      change([v](Settings &x) { x.roomSaturation = v; });
+                                                    });
   // Debug: white = game, black = room. Shows what the brightness key keeps.
   auto showMask = BSML::Lite::CreateToggle(parent, "Debug: show see-through mask", s.showMask, [](bool v) {
     change([v](Settings &x) { x.showMask = v; });
@@ -127,7 +141,8 @@ void buildPanel(UnityEngine::Transform *parent) {
 
   // Drop panels whose scene is gone, then remember this one.
   std::erase_if(panels, [](const Panel &p) { return !p.enabled; });
-  panels.push_back(Panel{enabled, hideSong, hideMenu, fog, showMask, quickToggle, key, opacity});
+  panels.push_back(
+      Panel{enabled, hideSong, hideMenu, fog, showMask, quickToggle, key, opacity, brightness, contrast, saturation});
 }
 
 void refreshAll() {
