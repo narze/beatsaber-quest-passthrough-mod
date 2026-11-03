@@ -82,7 +82,10 @@ Settings are in the game in four places: Mod Settings > Passthrough, the "Passth
 | Distance fog | off | Keeps the game's fog when the song environment is hidden. Far notes then fade in from the room. |
 | Toggle passthrough with | A + B | In the menu or during a song, press this controller combo to turn Passthrough on or off. Choices: Off, A + B, X + Y, X + A, Y + B, left, right, or both stick clicks. |
 | See-through below brightness | 0.015 | Pixels darker than this show the room. Higher: more see-through. If dark parts of objects become see-through, set it lower. |
-| Room brightness (opacity) | 1.0 | Opacity of the passthrough image. |
+| Room opacity | 1.0 | Opacity of the passthrough image. |
+| Room brightness | 0 | Makes the room darker (down to -100) or lighter (up to 100). A darker room can make notes easier to see. |
+| Room contrast | 1.0 | Contrast of the room, 0 to 2. |
+| Room saturation | 1.0 | Color of the room, 0 (gray) to 2. |
 | Debug: show see-through mask | off | Shows the mask in grayscale: white is the game, black is the room. Not saved. |
 
 ## How it works
